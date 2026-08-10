@@ -1,0 +1,26 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+htmlcov/
+.eggs/
+*.whl
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+artifacts/
+.graft/reports/
+.graft/state/
+.graft/telemetry/
+*.graft-backup-*
+
+# Keep unpublished paper drafts and local research audits out of the public code repository.
+*.docx
+GRAFT_WSDM*.md
+GRAFT_v1_WSDM*.md
+GRAFT_研究*.md
+GRAFT_原稿*.md

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-graft"
+version = "0.4.0"
+description = "A budget-aware verification governor for Codex checkpoints."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Zongwei9888"}]
+dependencies = []
+keywords = ["codex", "agents", "verification", "testing", "reliability"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://github.com/Zongwei9888/GRAFT"
+Repository = "https://github.com/Zongwei9888/GRAFT"
+Issues = "https://github.com/Zongwei9888/GRAFT/issues"
+Changelog = "https://github.com/Zongwei9888/GRAFT/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["build>=1.2", "twine>=5.1"]
+
+[project.scripts]
+graft = "graft.cli:main"
+graft-hook = "graft.codex.hooks:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+graft = ["resources/*.json", "py.typed"]

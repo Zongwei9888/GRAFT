@@ -1,0 +1,85 @@
+{
+  "$schema": "../schemas/graft_config.schema.json",
+  "version": 1,
+  "enabled": true,
+  "budget": 4.5,
+  "max_set_fpr": 0.20,
+  "checkpoint_mode": "completion",
+  "max_feedback_rounds": 2,
+  "failure_policy": "open",
+  "environment_fingerprint": "isolated-codex-review-v1",
+  "verifiers": [
+    {
+      "id": "python-compile",
+      "kind": "command",
+      "cost": 0.5,
+      "blocking": true,
+      "failure_modes": ["build_type_api_schema_failure"],
+      "command": ["python3", "-m", "compileall", "-q", "src", "tests"],
+      "lineage": {"provider": "cpython", "oracle": "python-parser"}
+    },
+    {
+      "id": "unit-tests",
+      "kind": "command",
+      "cost": 1.5,
+      "blocking": true,
+      "failure_modes": ["direct_requirement_failure", "regression"],
+      "command": ["python3", "scripts/run_tests.py"],
+      "lineage": {"provider": "local-tests", "oracle": "unittest"}
+    },
+    {
+      "id": "codex-fresh-review",
+      "kind": "codex_review",
+      "cost": 2.5,
+      "blocking": false,
+      "failure_modes": ["incomplete_fix", "wrong_target", "regression"],
+      "sandbox": "read-only",
+      "lineage": {
+        "provider": "openai",
+        "thread_policy": "fresh-ephemeral",
+        "prompt_family": "graft-repository-review-v1",
+        "context_sources": ["raw-requirements", "repository"],
+        "oracle": "model-semantic-review"
+      }
+    }
+  ],
+  "calibration": {
+    "failure_scenarios": [
+      {
+        "id": "syntax",
+        "detections": {
+          "python-compile": 1.0,
+          "unit-tests": 0.8,
+          "codex-fresh-review": 0.4
+        }
+      },
+      {
+        "id": "behavior",
+        "detections": {
+          "python-compile": 0.0,
+          "unit-tests": 1.0,
+          "codex-fresh-review": 0.7
+        }
+      },
+      {
+        "id": "incomplete",
+        "detections": {
+          "python-compile": 0.0,
+          "unit-tests": 0.4,
+          "codex-fresh-review": 0.9
+        }
+      }
+    ],
+    "clean_scenarios": [
+      {
+        "id": "clean",
+        "false_alarms": {
+          "python-compile": 0.0,
+          "unit-tests": 0.0,
+          "codex-fresh-review": 0.12
+        }
+      }
+    ]
+  },
+  "_note": "Operational example only; replace fixture scenario probabilities with held-out calibration data for research."
+}

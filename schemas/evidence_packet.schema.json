@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GRAFT evidence packet",
+  "type": "object",
+  "properties": {
+    "verifier_id": {"type": "string"},
+    "verdict": {"enum": ["pass", "fail", "abstain", "error"]},
+    "source_hash": {"type": "string"},
+    "summary": {"type": "string"},
+    "reproducible": {"type": "boolean"},
+    "report_path": {"type": ["string", "null"]}
+  },
+  "required": [
+    "verifier_id",
+    "verdict",
+    "source_hash",
+    "summary",
+    "reproducible"
+  ],
+  "additionalProperties": true
+}

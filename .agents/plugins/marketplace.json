@@ -1,0 +1,20 @@
+{
+  "name": "graft",
+  "interface": {
+    "displayName": "GRAFT Open Source"
+  },
+  "plugins": [
+    {
+      "name": "graft",
+      "source": {
+        "source": "local",
+        "path": "./plugins/graft"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

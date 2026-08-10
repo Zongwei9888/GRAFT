@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GRAFT configuration v1",
+  "type": "object",
+  "required": [
+    "version",
+    "enabled",
+    "budget",
+    "max_set_fpr",
+    "checkpoint_mode",
+    "max_feedback_rounds",
+    "failure_policy",
+    "verifiers",
+    "calibration"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "enabled": {"type": "boolean"},
+    "budget": {"type": "number", "minimum": 0},
+    "max_set_fpr": {"type": "number", "minimum": 0, "maximum": 1},
+    "checkpoint_mode": {
+      "type": "string",
+      "enum": ["completion", "strict", "explicit"]
+    },
+    "max_feedback_rounds": {"type": "integer", "minimum": 0},
+    "failure_policy": {"type": "string", "enum": ["open", "closed"]},
+    "environment_fingerprint": {"type": "string"},
+    "verifiers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/verifier"}
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["failure_scenarios", "clean_scenarios"],
+      "properties": {
+        "failure_scenarios": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/failureScenario"}
+        },
+        "clean_scenarios": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/cleanScenario"}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "lineage": {
+      "type": "object",
+      "properties": {
+        "provider": {"type": "string"},
+        "model": {"type": "string"},
+        "thread_policy": {"type": "string"},
+        "prompt_family": {"type": "string"},
+        "context_sources": {"type": "array", "items": {"type": "string"}},
+        "modality": {"type": "array", "items": {"type": "string"}},
+        "oracle": {"type": "string"},
+        "test_author": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "verifier": {
+      "type": "object",
+      "required": ["id", "kind", "cost"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "enum": ["command", "codex_review"]},
+        "cost": {"type": "number", "minimum": 0},
+        "blocking": {"type": "boolean"},
+        "failure_modes": {"type": "array", "items": {"type": "string"}},
+        "timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "failure_exit_codes": {"type": "array", "items": {"type": "integer"}},
+        "working_directory": {"type": "string"},
+        "prompt_template": {"type": "string"},
+        "model": {"type": "string"},
+        "sandbox": {"type": "string"},
+        "lineage": {"$ref": "#/$defs/lineage"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "command"}}},
+          "then": {"required": ["command"]}
+        }
+      ],
+      "additionalProperties": true
+    },
+    "failureScenario": {
+      "type": "object",
+      "required": ["id", "detections"],
+      "properties": {
+        "id": {"type": "string"},
+        "weight": {"type": "number", "minimum": 0},
+        "detections": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "additionalProperties": false
+    },
+    "cleanScenario": {
+      "type": "object",
+      "required": ["id", "false_alarms"],
+      "properties": {
+        "id": {"type": "string"},
+        "weight": {"type": "number", "minimum": 0},
+        "false_alarms": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "../schemas/graft_config.schema.json",
+  "version": 1,
+  "enabled": true,
+  "budget": 2.0,
+  "max_set_fpr": 0.05,
+  "checkpoint_mode": "completion",
+  "max_feedback_rounds": 2,
+  "failure_policy": "open",
+  "environment_fingerprint": "python-local-v1",
+  "verifiers": [
+    {
+      "id": "python-compile",
+      "kind": "command",
+      "cost": 0.5,
+      "blocking": true,
+      "failure_modes": ["build_type_api_schema_failure"],
+      "timeout_s": 30,
+      "command": ["python3", "-m", "compileall", "-q", "src", "tests"],
+      "failure_exit_codes": [1],
+      "lineage": {
+        "provider": "cpython",
+        "modality": ["source"],
+        "oracle": "python-parser"
+      }
+    },
+    {
+      "id": "unit-tests",
+      "kind": "command",
+      "cost": 1.5,
+      "blocking": true,
+      "failure_modes": [
+        "direct_requirement_failure",
+        "backward_compatibility_failure",
+        "state_or_side_effect_failure"
+      ],
+      "timeout_s": 90,
+      "command": ["python3", "scripts/run_tests.py"],
+      "failure_exit_codes": [1],
+      "lineage": {
+        "provider": "local-tests",
+        "modality": ["execution"],
+        "oracle": "unittest",
+        "test_author": "graft-project"
+      }
+    },
+    {
+      "id": "codex-fresh-review",
+      "kind": "codex_review",
+      "cost": 2.5,
+      "blocking": false,
+      "failure_modes": [
+        "direct_requirement_failure",
+        "wrong_target_or_incomplete_fix",
+        "backward_compatibility_failure"
+      ],
+      "timeout_s": 120,
+      "sandbox": "read-only",
+      "lineage": {
+        "provider": "openai",
+        "thread_policy": "fresh-ephemeral",
+        "prompt_family": "graft-repository-review-v1",
+        "context_sources": ["raw-requirements", "repository", "candidate-state"],
+        "modality": ["text", "source"],
+        "oracle": "model-semantic-review"
+      }
+    }
+  ],
+  "calibration": {
+    "failure_scenarios": [
+      {
+        "id": "syntax-import-failure",
+        "weight": 1.0,
+        "detections": {
+          "python-compile": 1.0,
+          "unit-tests": 0.8,
+          "codex-fresh-review": 0.4
+        }
+      },
+      {
+        "id": "direct-behavior-failure",
+        "weight": 1.0,
+        "detections": {
+          "python-compile": 0.0,
+          "unit-tests": 1.0,
+          "codex-fresh-review": 0.7
+        }
+      },
+      {
+        "id": "semantic-incomplete-fix",
+        "weight": 1.0,
+        "detections": {
+          "python-compile": 0.0,
+          "unit-tests": 0.5,
+          "codex-fresh-review": 0.8
+        }
+      }
+    ],
+    "clean_scenarios": [
+      {
+        "id": "clean-local",
+        "weight": 1.0,
+        "false_alarms": {
+          "python-compile": 0.0,
+          "unit-tests": 0.0,
+          "codex-fresh-review": 0.15
+        }
+      }
+    ]
+  },
+  "_note": "Operational fixture probabilities for local product testing only; not paper calibration evidence."
+}

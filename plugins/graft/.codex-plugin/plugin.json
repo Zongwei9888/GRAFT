@@ -1,0 +1,32 @@
+{
+  "name": "graft",
+  "version": "0.4.0",
+  "description": "A local verification governor that checks Codex checkpoints before a task stops.",
+  "author": {
+    "name": "Zongwei9888"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "verification",
+    "testing",
+    "agent-reliability"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "GRAFT",
+    "shortDescription": "Verify Codex checkpoints with complementary local evidence",
+    "longDescription": "GRAFT observes Codex turns, freezes changed workspace state at completion checkpoints, selects a verifier subset under a configured budget, and either allows completion or returns reproducible evidence for another repair turn.",
+    "developerName": "Zongwei9888",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Show the GRAFT status for this workspace",
+      "Initialize safe GRAFT verifiers for this repository",
+      "Explain the latest GRAFT verification report"
+    ],
+    "brandColor": "#4F46E5"
+  }
+}
