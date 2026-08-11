@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -50,6 +51,37 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertEqual(
             dataset["task_names"], ["terminal-bench/session-window-debug"]
         )
+
+    def test_original_method_html_pilot_has_a_matched_native_control(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT / "configs" / "html-js-filter-graft-original-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "html-js-filter-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertTrue(graft["datasets"][0]["ref"].startswith("sha256:"))
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/html-js-filter"],
+        )
+        for field in ("model_name", "kwargs"):
+            self.assertEqual(graft["agents"][0][field], native["agents"][0][field])
+
+    def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
+        source = (
+            EXPERIMENT_ROOT / "graft_original_codex_agent.py"
+        ).read_text(encoding="utf-8")
+        commit = re.search(r'GRAFT_COMMIT = "([0-9a-f]+)"', source)
+        self.assertIsNotNone(commit)
+        self.assertRegex(commit.group(1), r"^[0-9a-f]{40}$")
+        self.assertIn("test ! -d", source)
+        self.assertIn("/profiles", source)
+        self.assertNotIn("terminal-bench/html-js-filter", source)
+        self.assertNotIn("test_outputs.py", source)
 
 
 if __name__ == "__main__":
