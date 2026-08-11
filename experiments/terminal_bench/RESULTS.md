@@ -438,3 +438,154 @@ the previously observed destructive feedback. The remaining research question
 is whether dynamically generated, requirement-grounded executable
 counterexamples and actionability-aware retrieval improve held-out task success
 under a fixed budget.
+
+## 2026-08-11: Terminal-Bench 3 `risk-scorer-replay`
+
+This is the first prospective pair after making executable,
+requirement-grounded Test-Agent evidence eligible for feedback and making the
+selector optimize expected *actionable* coverage. GRAFT used no task profile,
+task-specific command, fixture, or hidden-test information. Both conditions
+passed the official evaluator, so this is positive mechanism evidence but not
+positive binary effectiveness evidence.
+
+| Field | Native Codex | Codex + dynamic GRAFT |
+|---|---:|---:|
+| Harbor reward | 1.0 | 1.0 |
+| Hidden tests | 5 passed, 0 failed | 5 passed, 0 failed |
+| Input tokens | 3,550,428 | 5,744,699 |
+| Cached input tokens | 3,412,480 | 5,136,640 |
+| Output tokens | 47,261 | 58,742 |
+| Estimated model cost | USD 3.813810 | USD 7.370875 |
+| Agent execution | 18m 39s | 36m 29s |
+| Hidden verifier | 16s | 18s |
+| Total wall time | 23m 20s | 41m 28s |
+
+Both conditions used Terminal-Bench 3 revision 10 at dataset digest
+`sha256:88433fbcecd1a3f81f7a71bff4cc76c394d0edbefb7e028f90d4109b639fefba`,
+task ref
+`sha256:81eda6d9247bd5642feaccabb8eaef055cca8c3e4dab00bceb89aee56645454f`,
+task checksum
+`5492235fa7b5586e10c021950422fe4420266f4a110ac61992c7b9bc107043b4`,
+Codex CLI 0.147.0, `gpt-5.6-sol`, and high reasoning. The official oracle
+scored 1.0 before the pair. The treatment pinned GRAFT source commit
+`b0cde37f1eb7b484d35e1bf41934d24bd003272b`. Trial IDs were
+`risk-scorer-replay__Y4ti5Ty` (GRAFT) and
+`risk-scorer-replay__5ctn4JN` (native). Treatment ran first. Hidden evaluator
+contents were inspected only after both scored conditions finished.
+
+The five official checks covered the legacy-binary oracle, rebuilding without
+the legacy executable, route cutoffs/defaults/interactions, manifest-selected
+paths/decoys/partial shadow data, and idempotent replay. Both candidates passed
+all five.
+
+### Causal Stop-continuation evidence
+
+Before its first completion attempt, treatment Codex had already taken 69 tool
+steps and run 4,000 differential probes. GRAFT then blocked that Stop boundary
+and returned executable evidence to the same Codex thread. The selected
+`adversarial-contract-test-agent` and `agentic-production-parity` found that the
+first candidate mishandled categorical whitespace; the latter reproduced two
+mismatches over 2,363 same-schema requests. The complete report also identified
+manifest path escape, partial artifact publication on SQLite failure, a
+full-precision shadow-error issue, and a non-executable rebuild script. Codex
+inspected that report, repaired whitespace handling and full-precision error
+calculation, enforced packet-root path containment, staged artifact publication
+with rollback, and ran another 2,500 probes.
+
+The second checkpoint selected `runtime-integrity-inspector` and
+`adversarial-packet-test`. The adversarial packet verifier passed. The runtime
+inspector reproduced only that `/app/rebuild_parity_report.sh` was root-owned
+and mode 0644. The producer ran as `nobody`, could neither replace nor change
+the mode of that baseline file, and explained this after the second
+continuation. The feedback-round budget prevented an infinite loop, but the
+archived session state remained `active` at round two instead of recording a
+terminal unresolved/budget-exhausted state. This is a lifecycle accounting
+defect to fix; the second block itself was also expensive and not actionable by
+the producer.
+
+This trajectory establishes the intended product mechanism:
+
+```text
+Codex first candidate -> Stop -> dynamic LLM verification -> reproducible issue
+                      -> same Codex session repairs -> Stop -> re-verification
+```
+
+It does not establish that GRAFT was necessary for benchmark success. Native
+Codex independently handled whitespace and full-precision scoring, ran 1,200
+random probes, noticed the same immutable script mode, and passed all hidden
+tests. Its final implementation did not add GRAFT's packet-root containment or
+atomic output publication, but those hardening changes were outside the five
+official checks.
+
+### High-order selection audit
+
+Contrary to an initial inspection of the wrong JSON field, the graphs did not
+omit high-order lineage: both checkpoints contained six
+`shared_blind_spots`. They represented shared model/provider/task
+interpretation, candidate-workspace lineage, finite production black-box
+probing, LLM-generated tests, repository oracles, and source/text modalities.
+The selector used these edges.
+
+An offline counterfactual replay on the same frozen graph, changing only the
+assumption that candidates were independent, changed both selections:
+
+| Checkpoint | Recorded lineage-aware selection | Independence counterfactual |
+|---|---|---|
+| Initial | `adversarial-contract-test-agent` + `agentic-production-parity` | `adversarial-contract-test-agent` + `agentic-pipeline-evidence` |
+| Post-repair | `runtime-integrity-inspector` + `adversarial-packet-test` | `runtime-integrity-inspector` + `runtime-scoring-prober` |
+
+This is direct evidence that the high-order common-failure model affected the
+retrieval decision. It is not evidence that the changed decision improved
+hidden reward: the initial adversarial verifier was present in both selections,
+and both benchmark candidates ultimately scored 1.0.
+
+### Censored environment bring-up attempts
+
+Four treatment launches before the scored treatment failed before a valid
+producer trajectory existed. They are recorded as integration failures and are
+excluded from task effectiveness:
+
+1. The initial disposable clone was rejected by Git's dubious-ownership check
+   before Codex started.
+2. Retry 1 attempted to place profile-free runtime state under the read-only
+   task workspace before Codex started.
+3. Retry 2 injected an authentication file that the implicit container user
+   could not read; Codex returned HTTP 401 before task work.
+4. Retry 3 reproduced the authentication-ownership diagnosis and again reached
+   no authenticated task trajectory.
+
+The runner corrections were applied generically to both arms: profile-free
+configuration lives outside the task workspace, and the injected auth file is
+owned by the UID discovered inside the task container. Retry 4 was the first
+valid treatment. The matched native run used the same corrected ownership
+path.
+
+### Interpretation
+
+On this task, GRAFT added 18m 08s total wall time (+77.7%), USD 3.557065 in
+recorded model cost (+93.3%), 2,194,271 input tokens (+61.8%), and 11,481 output
+tokens (+24.3%) without changing binary reward. Because producer trajectories
+are stochastic, the total delta cannot be attributed entirely to verification
+overhead. Nevertheless, the treatment is clearly much more expensive.
+
+The result is scientifically useful but mixed: dynamic LLM verification found
+real defects after Codex believed it was done, generated actionable evidence,
+and caused repairs in the same session; native Codex nevertheless solved the
+official task more cheaply. One paired task at a ceiling score cannot support
+an effectiveness or significance claim. The next study needs multiple unseen
+tasks and seeds under an externally enforced verification budget, plus metrics
+for first-candidate defect repair and robustness beyond the benchmark's binary
+reward. The immediate generic engineering target is to discount evidence that
+is reproducible but not repairable in the producer's environment, without
+hard-coding task types or replacing the frozen LLM-driven method.
+
+### Cumulative interpretation after four profile-free pairs
+
+Across the four recorded profile-free dynamic pairs, Native Codex has binary
+success on 3/4 tasks and Codex + GRAFT on 1/4. The two newer pairs show that the
+provenance, lineage, and actionability corrections improved the *behavior* of
+the governor: destructive speculative feedback disappeared, high-order edges
+changed selection, and this task produced a genuine same-session repair. They
+still do not show a benchmark-success advantage. A WSDM 2027 paper is therefore
+not yet justified by effectiveness results; the current contribution remains
+a testable method and an increasingly reliable experimental instrument.
