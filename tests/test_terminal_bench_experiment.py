@@ -288,6 +288,35 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             "/logs/agent/graft-checkpoints",
         )
 
+    def test_oracle_fallback_causal_pair_is_frozen_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "embedding-drift-monitor-graft-causal-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "embedding-drift-monitor-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/embedding-drift-monitor"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "8a0465f5cd1b6b9735a900ceb9c6ec676cabf00d",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

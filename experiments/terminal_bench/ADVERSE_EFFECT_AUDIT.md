@@ -143,3 +143,24 @@ The execution order is frozen as:
 No implementation change based on this task is credited to the treatment being
 evaluated. Any later correction must be generic, committed, and tested before a
 different unseen task is selected.
+
+### Oracle-validity fallback
+
+The selected `distributed-dedup` task was censored before any treatment or
+Native run. Its official solution exited 1 because it imports
+`tb.dedup.task.Hashing`, which is absent from the task package at the pinned
+revision; the Scala submission therefore did not compile. The verifier was
+interrupted after the reference failure was established. This is a benchmark
+infrastructure failure, not a score for either method.
+
+For this and later causal pilots, an oracle-invalid task is replaced by the next
+entry in the same sorted eligible list, wrapping at the end. No additional hash
+or subjective choice is made. The first fallback is therefore:
+
+```text
+task: terminal-bench/embedding-drift-monitor
+task digest: sha256:cc93452e15459e00dcd817867428f4c49cd5a8831213ba4590f1372929cb262e
+```
+
+The same execution order and analysis rules apply. If this oracle is invalid,
+the next fallback is `kv-live-surgery`.
