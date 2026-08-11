@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -17,7 +18,7 @@ from graft.schema import (
     VerifierSpec,
     Verdict,
 )
-from graft.verifiers import VerifierExecutor
+from graft.verifiers import VerifierExecutor, _command_fingerprints
 
 
 class EvidenceRunner:
@@ -72,6 +73,18 @@ class EvidenceRunner:
 
 
 class CodexReviewerTests(unittest.TestCase):
+    def test_shell_wrappers_are_structurally_equivalent_evidence(self) -> None:
+        script = "PYTHONPATH=/tmp/workspace python3 - <<'PY'\nprint('ok')\nPY"
+        reported = _command_fingerprints(("bash", "-lc", script))
+        observed = _command_fingerprints(
+            "/bin/bash -lc " + shlex.quote(script)
+        )
+        self.assertTrue(reported & observed)
+        self.assertFalse(
+            reported
+            & _command_fingerprints(("bash", "-lc", "python3 -c 'print(2)'"))
+        )
+
     def test_fresh_reviewer_is_parsed_and_does_not_mutate_producer(self) -> None:
         fixture = Path(__file__).parent / "fixtures" / "fake_codex.py"
         runner = CliCodexRunner((sys.executable, str(fixture)))

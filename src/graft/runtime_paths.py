@@ -18,6 +18,7 @@ class WorkspaceRuntimePaths:
     telemetry_dir: Path
     reports_dir: Path
     events_dir: Path
+    baselines_dir: Path
 
 
 def resolve_workspace(cwd: Path) -> Path:
@@ -110,4 +111,5 @@ def workspace_runtime_paths(workspace: Path) -> WorkspaceRuntimePaths:
         telemetry_dir=workspace_data / "telemetry",
         reports_dir=workspace_data / "reports",
         events_dir=workspace_data / "events",
+        baselines_dir=workspace_data / "baselines",
     )

@@ -199,6 +199,7 @@ def freeze_source(
     baseline_tree_hash: str | None = None,
     baseline_files: Sequence[str] = (),
     baseline_file_hashes: Mapping[str, str] | None = None,
+    baseline_archive_path: str | None = None,
 ) -> SourceSnapshot:
     tree_hash, files, file_hashes = hash_tree_manifest(root)
     requirement_hash = hash_texts(requirements)
@@ -224,4 +225,5 @@ def freeze_source(
         baseline_files=tuple(baseline_files),
         file_hashes=file_hashes,
         baseline_file_hashes=dict(baseline_file_hashes or {}),
+        baseline_archive_path=baseline_archive_path,
     )

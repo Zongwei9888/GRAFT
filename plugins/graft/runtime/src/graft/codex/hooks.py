@@ -13,6 +13,7 @@ from graft.codex.event_dedup import claim_event
 from graft.codex.session_state import SessionStateStore, prompt_hash
 from graft.configuration import resolve_config
 from graft.controller import GraftController
+from graft.evidence.baseline_archive import archive_baseline
 from graft.evidence.checkpoint_archive import archive_checkpoint
 from graft.evidence.snapshot import hash_tree, hash_tree_manifest
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
@@ -37,13 +38,35 @@ def user_prompt_submit() -> int:
     paths = workspace_runtime_paths(workspace)
     if not claim_event(paths.events_dir, "UserPromptSubmit", event):
         return _emit({"continue": True})
-    resolution = resolve_config(workspace)
     session_id = str(event.get("session_id", "unknown"))
     prompt = str(event.get("prompt", ""))
     tree_hash, files, file_hashes = hash_tree_manifest(workspace)
     store = SessionStateStore(workspace, root=paths.state_dir)
     state = store.load(session_id)
-    store.record_prompt(state, prompt, tree_hash, files, file_hashes)
+    origin = store.record_prompt(state, prompt, tree_hash, files, file_hashes)
+    if (
+        origin == "user"
+        and not state.baseline_archive_path
+        and state.baseline_tree_hash == tree_hash
+        and state.baseline_file_hashes == file_hashes
+    ):
+        try:
+            state.baseline_archive_path = str(
+                archive_baseline(
+                    workspace,
+                    files=files,
+                    file_hashes=file_hashes,
+                    tree_hash=tree_hash,
+                    archive_root=paths.baselines_dir,
+                    session_id=session_id,
+                    task_epoch=state.task_epoch,
+                )
+            )
+            store.save(state)
+        except (OSError, ValueError):
+            # Baseline content improves semantic comparison but must not break
+            # the producer loop when external state storage is unavailable.
+            pass
     return _emit({"continue": True})
 
 
@@ -98,6 +121,7 @@ def stop() -> int:
             baseline_tree_hash=state.baseline_tree_hash,
             baseline_files=tuple(state.baseline_files),
             baseline_file_hashes=state.baseline_file_hashes,
+            baseline_archive_path=state.baseline_archive_path,
         )
         action = DefaultCheckpointPolicy().evaluate(
             state,

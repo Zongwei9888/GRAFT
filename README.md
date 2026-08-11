@@ -92,8 +92,10 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
 3. `Stop` freezes the current source state. A producer message such as “done” is not treated as
    evidence and is not classified by task-specific keywords.
 4. A read-only ephemeral model call builds Behaviors and Failure Modes from requirements,
-   unchanged baseline repository rules, state, and diff. Candidate-added or modified files cannot
-   introduce a new contract.
+   unchanged baseline repository rules, state, and an immutable bounded task-start text diff (including
+   in non-Git directories). Candidate-added or modified files cannot introduce a new contract.
+   Ambiguous alternatives remain competing hypotheses for discriminating checks rather than being
+   silently removed.
 5. A second isolated structured call instantiates verifier candidates from general capabilities,
    estimates the chance of producing *eligible reproducible evidence* (not merely noticing a
    suspicious pattern), and describes high-order shared blind spots.
@@ -109,9 +111,9 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
    contracts, source-review suspicions, errors, abstentions, and capability gaps do not become
    blocking evidence.
 
-Reports are source-bound and stored outside arbitrary target repositories in the platform's GRAFT
-state directory. The original producer workspace is checked again after verification so stale
-evidence cannot gate a newer state.
+Reports and bounded immutable task-start text archives are source-bound and stored outside arbitrary target
+repositories in the platform's GRAFT state directory. The original producer workspace is checked
+again after verification so stale evidence cannot gate a newer state.
 
 ## Source checkout
 

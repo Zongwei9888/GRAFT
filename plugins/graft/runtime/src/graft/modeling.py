@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from graft.codex.cli_runner import CliCodexRunner, CodexExecutionError
+from graft.evidence.baseline_archive import baseline_diff_excerpt
 from graft.evidence.snapshot import freeze_source
 from graft.registry import GraftConfig, ModelStageConfig
 from graft.schema import (
@@ -170,6 +171,7 @@ def _behavior_prompt(
     )
     if changed == ():
         changed_text = "- <none>"
+    baseline_diff = baseline_diff_excerpt(snapshot)
     return f"""You are the structured Behavior and Failure-Mode constructor for GRAFT Original.
 
 Model the current task, not a generic programming checklist. Read the raw user requirements below,
@@ -183,7 +185,10 @@ implementation assumption into a Behavior by demanding stricter input ordering o
 semantics than the raw task or baseline repository establishes. Candidate source and diff may
 suggest Failure Modes, but every Behavior must remain traceable to the raw requirements or baseline
 contract. When the contract is ambiguous, record an uncertainty instead of choosing the stricter
-interpretation. If an important behavior cannot be verified with available repository state,
+interpretation. Ambiguity must not erase a named defective component from the failure model:
+enumerate materially different plausible semantics as competing hypotheses and request inputs that
+discriminate them, while keeping the ambiguity explicit. A hypothesis is not authoritative merely
+because it is common. If an important behavior cannot be verified with available repository state,
 record that uncertainty explicitly.
 
 Raw requirements:
@@ -195,6 +200,9 @@ Visible source entries: {len(snapshot.files)}
 Baseline tree hash: {snapshot.baseline_tree_hash or '<unavailable>'}
 Files added or modified after the task baseline (non-authoritative as contract sources):
 {changed_text}
+
+Immutable baseline-to-candidate diff (implementation evidence only; never a new contract source):
+{baseline_diff}
 
 Use stable short identifiers. Scores are risk factors in [0,1]; Failure Mode risk may be in [0,2].
 Return only the schema-conforming object.
@@ -243,7 +251,11 @@ target concrete Failure Mode identifiers and receive a task-specific objective a
 detection probabilities conservatively. Here detection means the probability that the candidate
 will both discover the Failure Mode and return evidence eligible for reproducible Stop feedback
 under its sandbox, isolation, blocking flag, and available oracle—not merely notice a suspicious
-source pattern. A non-blocking advisory reviewer has zero Stop-gating detection probability.
+source pattern. For an explicitly uncertain semantic branch, prefer candidates that execute one
+input which distinguishes the competing hypotheses and report the observed branch; do not silently
+drop the branch. The observation is blocking only when raw requirements or unchanged baseline
+authority selects one hypothesis. A non-blocking advisory reviewer has zero Stop-gating detection
+probability.
 Explicitly identify higher-order shared blind spots caused
 by shared model, prompt, context, modality, test author, oracle, or task interpretation. Different
 candidate names or fresh threads are not evidence of independence. Report capability gaps instead

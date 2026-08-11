@@ -22,6 +22,14 @@ All notable changes follow semantic versioning.
   behavior, missed executable counterexample, and lack of causal continuation feedback;
 - make the selector assign zero Stop-gating utility to non-blocking findings and redefine planner
   detection estimates as the probability of producing eligible reproducible feedback.
+- archive immutable task-start source outside the producer workspace so non-Git tasks expose a
+  bounded baseline-to-candidate semantic diff without treating candidate text as contract;
+- require ambiguous semantic branches to remain as competing, discriminated hypotheses instead of
+  disappearing from the dynamic failure model;
+- recognize structurally equivalent shell wrappers when confirming that reported evidence was
+  actually executed, while retaining exact argv/payload matching rather than substring promotion;
+- add evaluator-only first-Stop checkpoint replay and record the prospective
+  `embedding-drift-monitor` zero-benefit result.
 
 ## 0.5.0 - 2026-08-10
 

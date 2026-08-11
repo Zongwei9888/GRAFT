@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from graft.codex.cli_runner import CliCodexRunner, CodexExecutionError
+from graft.evidence.baseline_archive import baseline_diff_excerpt
 from graft.evidence.snapshot import freeze_source
 from graft.schema import (
     EvidenceItem,
@@ -326,6 +327,7 @@ def _verifier_prompt(
     )
     if changed == ():
         changed_text = "- <none>"
+    baseline_diff = baseline_diff_excerpt(snapshot)
     mode = (
         "You may create temporary tests and artifacts because this is a disposable workspace copy."
         if spec.isolation == "temporary-copy"
@@ -354,6 +356,8 @@ Environment fingerprint used by this run: {environment_fingerprint}
 Baseline tree hash: {snapshot.baseline_tree_hash or '<unavailable>'}
 Files added or modified after the task baseline:
 {changed_text}
+Immutable baseline-to-candidate diff (implementation evidence only; not a contract oracle):
+{baseline_diff}
 {mode}
 
 Inspect the actual repository and use tools when they can establish observable evidence. Do not
@@ -379,7 +383,9 @@ observed runtime artifact. Requirement-derived runtime evidence must additionall
 direct violation of those cited requirements. Merely inspecting/parsing source, asserting an
 unstated stronger policy, or testing a substitute implementation does not qualify. If a
 precondition is not stated by the raw requirements or baseline contract, abstain instead of
-enforcing the stricter interpretation. Return only the schema-conforming verdict object. If the
+enforcing the stricter interpretation. When competing standard semantics remain plausible, run a
+case that distinguishes them and report which branch the candidate implements; do not call that
+branch wrong without contract authority. Return only the schema-conforming verdict object. If the
 required capability or oracle is unavailable, abstain instead of guessing.
 """
 
@@ -471,10 +477,8 @@ def _blocking_reproduced_modes(
             continue
         observed_command = False
         if item.command:
-            wanted = _normalize_command(item.command)
-            observed_command = any(
-                wanted == command or wanted in command for command in observed
-            )
+            wanted = _command_fingerprints(item.command)
+            observed_command = bool(wanted & observed)
         observed_artifact = _observed_artifact(item, run_root)
         if not observed_command and not observed_artifact:
             continue
@@ -547,8 +551,8 @@ def _candidate_changed_files(snapshot: SourceSnapshot) -> tuple[str, ...] | None
     return tuple(sorted(changed))
 
 
-def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> tuple[str, ...]:
-    result: list[str] = []
+def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> frozenset[str]:
+    result: set[str] = set()
     for event in events:
         item = event.get("item")
         if not isinstance(item, Mapping):
@@ -557,10 +561,45 @@ def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> tuple[str, ...]
             continue
         command = item.get("command")
         if isinstance(command, list):
-            result.append(_normalize_command(tuple(str(part) for part in command)))
+            result.update(_command_fingerprints(tuple(str(part) for part in command)))
         elif command is not None:
-            result.append(" ".join(str(command).split()))
-    return tuple(result)
+            result.update(_command_fingerprints(str(command)))
+    return frozenset(result)
+
+
+def _command_fingerprints(command: tuple[str, ...] | str) -> frozenset[str]:
+    """Canonicalize executed and reported commands without substring matching.
+
+    Codex events commonly serialize ``/bin/bash -lc '...'`` as one string,
+    while the structured verdict reports ``["bash", "-lc", "..."]``. Exact
+    string comparison rejects that genuinely executed evidence. Parsing both
+    forms into argv and comparing the shell payload preserves an exact match
+    while tolerating executable paths and quoting representation.
+    """
+
+    if isinstance(command, str):
+        try:
+            parts = tuple(shlex.split(command))
+        except ValueError:
+            normalized = " ".join(command.split())
+            return frozenset({f"text:{normalized}"}) if normalized else frozenset()
+    else:
+        parts = tuple(str(part) for part in command)
+    if not parts:
+        return frozenset()
+
+    executable = Path(parts[0]).name
+    normalized_parts = (executable, *parts[1:])
+    fingerprints = {f"argv:{_normalize_command(normalized_parts)}"}
+    if executable in {"bash", "sh", "zsh"}:
+        for flag in ("-c", "-lc"):
+            if flag in parts:
+                index = parts.index(flag)
+                if index + 1 < len(parts):
+                    payload = " ".join(parts[index + 1].split())
+                    fingerprints.add(f"shell:{executable}:{payload}")
+                break
+    return frozenset(fingerprints)
 
 
 def _normalize_command(command: tuple[str, ...]) -> str:

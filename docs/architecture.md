@@ -45,7 +45,8 @@ Security boundaries:
 - project overrides require an exact trusted config hash;
 - model stages run in fresh ephemeral threads with hooks/user config/rules isolated;
 - writable verifier agents use disposable copies;
-- task-start per-file hashes separate unchanged baseline oracles from candidate-authored artifacts;
+- task-start per-file hashes and an external bounded text-source archive separate unchanged baseline
+  oracles from candidate-authored artifacts and provide semantic diffs in non-Git directories;
 - model-only suspicions, generated mocks, candidate contracts, and source-display commands cannot
   become blocking evidence; an authoritative runtime observation, unchanged baseline oracle, or
   raw-requirement-derived executable counterexample against the actual candidate is required;

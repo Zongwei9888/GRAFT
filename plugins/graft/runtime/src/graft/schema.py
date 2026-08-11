@@ -177,6 +177,7 @@ class SourceSnapshot:
     baseline_files: tuple[str, ...] = ()
     file_hashes: Mapping[str, str] = field(default_factory=dict)
     baseline_file_hashes: Mapping[str, str] = field(default_factory=dict)
+    baseline_archive_path: str | None = None
 
 
 @dataclass(frozen=True)

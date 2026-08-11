@@ -80,10 +80,11 @@ config directory or `GRAFT_CONFIG_HOME`.
 
 ## State and privacy
 
-Raw user prompts and the task-start per-file hash manifest are retained locally to reconstruct
-multi-turn requirements and distinguish baseline authority from candidate-authored artifacts. Tool
-inputs and responses are stored only as hashes. Reports contain model-derived task structures and
-evidence, so the state directory remains user-private.
+Raw user prompts, the task-start per-file hash manifest, and a bounded immutable task-start text archive
+are retained locally to reconstruct multi-turn requirements, produce bounded semantic diffs, and
+distinguish baseline authority from candidate-authored artifacts. Tool inputs and responses are
+stored only as hashes. Reports contain model-derived task structures and evidence, so the state
+directory remains user-private.
 
 - macOS: `~/Library/Application Support/GRAFT/`;
 - Linux: `~/.local/state/graft/`;

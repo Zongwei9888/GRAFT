@@ -66,6 +66,7 @@ class GraftController:
         baseline_tree_hash: str | None = None,
         baseline_files: tuple[str, ...] = (),
         baseline_file_hashes: Mapping[str, str] | None = None,
+        baseline_archive_path: str | None = None,
     ) -> SourceSnapshot:
         return freeze_source(
             repo,
@@ -75,6 +76,7 @@ class GraftController:
             baseline_tree_hash=baseline_tree_hash,
             baseline_files=baseline_files,
             baseline_file_hashes=baseline_file_hashes,
+            baseline_archive_path=baseline_archive_path,
         )
 
     def verify(
@@ -208,6 +210,7 @@ class GraftController:
             baseline_tree_hash=source.baseline_tree_hash,
             baseline_files=source.baseline_files,
             baseline_file_hashes=source.baseline_file_hashes,
+            baseline_archive_path=source.baseline_archive_path,
         )
         if current.checkpoint_key != source.checkpoint_key:
             return self._finish(

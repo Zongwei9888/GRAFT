@@ -31,6 +31,7 @@ class SessionState:
     baseline_tree_hash: str | None = None
     baseline_files: list[str] = field(default_factory=list)
     baseline_file_hashes: dict[str, str] = field(default_factory=dict)
+    baseline_archive_path: str | None = None
     last_verified_checkpoint_key: str | None = None
     last_blocked_tree_hash: str | None = None
     last_feedback_hash: str | None = None
@@ -63,6 +64,7 @@ class SessionStateStore:
                 str(path): str(digest)
                 for path, digest in raw.get("baseline_file_hashes", {}).items()
             },
+            baseline_archive_path=raw.get("baseline_archive_path"),
             last_verified_checkpoint_key=raw.get("last_verified_checkpoint_key"),
             last_blocked_tree_hash=raw.get("last_blocked_tree_hash"),
             last_feedback_hash=raw.get("last_feedback_hash"),
@@ -101,6 +103,7 @@ class SessionStateStore:
                 state.baseline_tree_hash = current_tree_hash
                 state.baseline_files = list(current_files)
                 state.baseline_file_hashes = dict(current_file_hashes or {})
+                state.baseline_archive_path = None
                 state.last_verified_checkpoint_key = None
                 state.verification_round = 0
                 state.status = "active"

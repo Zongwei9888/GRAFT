@@ -95,6 +95,8 @@ class HookReplayTests(unittest.TestCase):
                 self._prompt(root, "session-pass", "Change the value")
                 captured = SessionStateStore(root).load("session-pass")
                 self.assertIn("source.py", captured.baseline_file_hashes)
+                self.assertIsNotNone(captured.baseline_archive_path)
+                self.assertTrue(Path(captured.baseline_archive_path).is_file())
                 original_digest = captured.baseline_file_hashes["source.py"]
                 (root / "source.py").write_text("value = 2\n", encoding="utf-8")
                 result = self._stop(root, "session-pass", exit_code=0)
