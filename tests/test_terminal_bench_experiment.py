@@ -247,6 +247,16 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         )
         self.assertNotIn("environment.default_user = agent_uid", treatment_source)
 
+    def test_causal_replay_adapter_is_evaluator_only(self) -> None:
+        source = (
+            EXPERIMENT_ROOT / "checkpoint_replay_agent.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('return "graft-checkpoint-replay"', source)
+        self.assertIn("expected_checkpoint_key", source)
+        self.assertIn("checkpoint_sha256", source)
+        self.assertIn("context.metadata", source)
+        self.assertNotIn("codex", source.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

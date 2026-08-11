@@ -4,6 +4,7 @@ import io
 import json
 import os
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -126,6 +127,45 @@ class HookReplayTests(unittest.TestCase):
                 )
                 self.assertTrue(second["continue"])
                 self.assertNotIn("decision", second)
+
+    def test_opt_in_archive_freezes_the_pre_feedback_checkpoint(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            tempfile.TemporaryDirectory() as state,
+            tempfile.TemporaryDirectory() as archives,
+        ):
+            root = Path(directory)
+            with patch.dict(
+                os.environ,
+                {
+                    "GRAFT_STATE_HOME": state,
+                    "GRAFT_CONFIG_HOME": str(Path(state) / "config"),
+                    "GRAFT_CHECKPOINT_ARCHIVE_HOME": archives,
+                },
+            ):
+                source = root / "source.py"
+                source.write_text("value = 1\n", encoding="utf-8")
+                self._config(root)
+                self._prompt(root, "session-archive", "Change the value")
+                source.write_text("value = 2\n", encoding="utf-8")
+
+                result = self._stop(root, "session-archive", exit_code=1)
+                self.assertEqual(result["decision"], "block")
+
+                captured = list(Path(archives).rglob("*.tar.gz"))
+                self.assertEqual(len(captured), 1)
+                checksum = captured[0].with_suffix(".gz.sha256")
+                self.assertTrue(checksum.is_file())
+                with tarfile.open(captured[0], "r:gz") as archive:
+                    member = archive.extractfile("workspace/source.py")
+                    self.assertIsNotNone(member)
+                    self.assertEqual(member.read(), b"value = 2\n")
+                    metadata_file = archive.extractfile("checkpoint.json")
+                    self.assertIsNotNone(metadata_file)
+                    metadata = json.load(metadata_file)
+                self.assertEqual(metadata["verification_round"], 0)
+                self.assertEqual(metadata["task_epoch"], 1)
+                self.assertEqual(metadata["skipped_files"], [])
 
     def test_multi_turn_clarification_stays_in_one_task_epoch(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:

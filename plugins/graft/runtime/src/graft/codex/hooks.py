@@ -13,6 +13,7 @@ from graft.codex.event_dedup import claim_event
 from graft.codex.session_state import SessionStateStore, prompt_hash
 from graft.configuration import resolve_config
 from graft.controller import GraftController
+from graft.evidence.checkpoint_archive import archive_checkpoint
 from graft.evidence.snapshot import hash_tree, hash_tree_manifest
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
 from graft.schema import DecisionKind
@@ -112,6 +113,13 @@ def stop() -> int:
                 state.status = "unresolved"
             store.save(state)
             return _emit({"continue": True})
+
+        archive_checkpoint(
+            snapshot,
+            session_id=session_id,
+            task_epoch=state.task_epoch,
+            verification_round=state.verification_round,
+        )
         if state.verification_round >= config.max_feedback_rounds:
             state.status = "unresolved"
             store.save(state)

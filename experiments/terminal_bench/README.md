@@ -96,3 +96,19 @@ dynamic original-method implementation.
 
 See [RESULTS.md](RESULTS.md) for scored outcomes, integration failures, costs,
 and post-hoc analyses.
+
+## Causal pre/post feedback evaluation
+
+Matched Native/GRAFT arms still contain independent model sampling. For causal
+feedback studies, set `GRAFT_CHECKPOINT_ARCHIVE_HOME` outside the task
+workspace. The treatment adapter does this automatically and archives every
+verification-eligible Stop checkpoint. The evaluator-only
+`CheckpointReplayAgent` restores a source-bound archive in a fresh task trial,
+allowing the unchanged official verifier to score the exact candidate from
+before GRAFT feedback.
+
+Checkpoint replay configs must pin both the archive SHA-256 and its full GRAFT
+checkpoint key. Archives with skipped files, unsafe paths, a mismatched digest,
+or a mismatched checkpoint key are rejected. See
+[`ADVERSE_EFFECT_AUDIT.md`](ADVERSE_EFFECT_AUDIT.md) for the pre-registered
+protocol and interpretation rules.

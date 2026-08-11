@@ -26,6 +26,7 @@ class GraftOriginalCodex(NativeCodex):
     REMOTE_CODEX_HOME = "/tmp/codex-home"
     GRAFT_CONFIG_HOME = "/logs/agent/graft-config"
     GRAFT_STATE_HOME = "/logs/agent/graft-state"
+    GRAFT_CHECKPOINT_ARCHIVE_HOME = "/logs/agent/graft-checkpoints"
     WORKSPACE = "/app"
 
     @staticmethod
@@ -47,6 +48,9 @@ class GraftOriginalCodex(NativeCodex):
         merged_env = dict(extra_env or {})
         merged_env.setdefault("GRAFT_CONFIG_HOME", self.GRAFT_CONFIG_HOME)
         merged_env.setdefault("GRAFT_STATE_HOME", self.GRAFT_STATE_HOME)
+        merged_env.setdefault(
+            "GRAFT_CHECKPOINT_ARCHIVE_HOME", self.GRAFT_CHECKPOINT_ARCHIVE_HOME
+        )
         super().__init__(*args, extra_env=merged_env, **kwargs)
 
     @override
@@ -106,7 +110,9 @@ class GraftOriginalCodex(NativeCodex):
                     f"{shlex.quote(self.GRAFT_SOURCE)} && "
                     f"mkdir -p {shlex.quote(self.REMOTE_CODEX_HOME)} "
                     f"{shlex.quote(self.GRAFT_CONFIG_HOME)} "
-                    f"{shlex.quote(self.GRAFT_STATE_HOME)} {shlex.quote(agent_dir)}"
+                    f"{shlex.quote(self.GRAFT_STATE_HOME)} "
+                    f"{shlex.quote(self.GRAFT_CHECKPOINT_ARCHIVE_HOME)} "
+                    f"{shlex.quote(agent_dir)}"
                 ),
                 (
                     f"git -C {shlex.quote(self.GRAFT_SOURCE)} rev-parse HEAD > "
@@ -146,6 +152,7 @@ class GraftOriginalCodex(NativeCodex):
                 "CODEX_HOME": self.REMOTE_CODEX_HOME,
                 "GRAFT_CONFIG_HOME": self.GRAFT_CONFIG_HOME,
                 "GRAFT_STATE_HOME": self.GRAFT_STATE_HOME,
+                "GRAFT_CHECKPOINT_ARCHIVE_HOME": self.GRAFT_CHECKPOINT_ARCHIVE_HOME,
             },
         )
 
@@ -171,6 +178,9 @@ class GraftOriginalCodex(NativeCodex):
                     f"tar -czf {shlex.quote(agent_dir + '/graft-state.tar.gz')} "
                     f"-C {shlex.quote(agent_dir)} graft-state && "
                     f"sha256sum {shlex.quote(agent_dir + '/graft-state.tar.gz')} > "
-                    f"{shlex.quote(agent_dir + '/graft-state.tar.gz.sha256')}; fi"
+                    f"{shlex.quote(agent_dir + '/graft-state.tar.gz.sha256')}; fi; "
+                    f"find {shlex.quote(self.GRAFT_CHECKPOINT_ARCHIVE_HOME)} "
+                    f"-type f -print 2>/dev/null | sort > "
+                    f"{shlex.quote(agent_dir + '/graft-checkpoint-files.txt')} || true"
                 ),
             )
