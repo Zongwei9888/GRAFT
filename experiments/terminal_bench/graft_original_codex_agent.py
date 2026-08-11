@@ -156,16 +156,6 @@ class GraftOriginalCodex(NativeCodex):
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
-        if environment.default_user is None:
-            identity = await self.exec_as_agent(environment, command="id -u")
-            agent_uid = (identity.stdout or "").strip()
-            if not agent_uid.isdigit():
-                raise RuntimeError("Could not resolve the disposable agent user's UID")
-            # Harbor 0.20 only chowns an uploaded auth.json when this field is
-            # populated. Some task images have a non-root default USER without
-            # declaring it in task metadata, so discover that generic runtime
-            # fact before delegating to Harbor's normal Codex auth setup.
-            environment.default_user = agent_uid
         await self._setup_graft(environment)
         try:
             await super().run(instruction, environment, context)

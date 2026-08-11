@@ -231,9 +231,21 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertIn("safe.directory", source)
         self.assertIn("graft-original-default", source)
         self.assertNotIn("cli init --repo", source)
-        self.assertIn("environment.default_user = agent_uid", source)
         self.assertNotIn("terminal-bench/html-js-filter", source)
         self.assertNotIn("test_outputs.py", source)
+
+    def test_auth_ownership_fix_is_shared_by_native_and_treatment(self) -> None:
+        native_source = (EXPERIMENT_ROOT / "graft_codex_agent.py").read_text(
+            encoding="utf-8"
+        )
+        treatment_source = (
+            EXPERIMENT_ROOT / "graft_original_codex_agent.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("environment.default_user = agent_uid", native_source)
+        self.assertIn(
+            "await super().run(instruction, environment, context)", native_source
+        )
+        self.assertNotIn("environment.default_user = agent_uid", treatment_source)
 
 
 if __name__ == "__main__":

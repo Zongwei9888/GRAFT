@@ -44,6 +44,26 @@ class NativeCodex(Codex):
                 merged_env.setdefault(key, value)
         super().__init__(*args, extra_env=merged_env, **kwargs)
 
+    @override
+    async def run(
+        self,
+        instruction: str,
+        environment: BaseEnvironment,
+        context: AgentContext,
+    ) -> None:
+        if environment.default_user is None:
+            identity = await self.exec_as_agent(environment, command="id -u")
+            agent_uid = (identity.stdout or "").strip()
+            if not agent_uid.isdigit():
+                raise RuntimeError("Could not resolve the disposable agent user's UID")
+            # Harbor 0.20 only chowns an uploaded auth.json when this field is
+            # populated. Some task images have a non-root default USER without
+            # declaring it in task metadata. Apply this generic infrastructure
+            # repair to both Native and GRAFT conditions before Harbor performs
+            # its normal Codex authentication setup.
+            environment.default_user = agent_uid
+        await super().run(instruction, environment, context)
+
 
 class GraftCodex(NativeCodex):
     """Harbor Codex adapter with a released GRAFT plugin and public profile."""
