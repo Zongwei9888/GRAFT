@@ -99,6 +99,8 @@ class GraftOriginalCodex(NativeCodex):
             (
                 (
                     "if [ -s ~/.nvm/nvm.sh ]; then . ~/.nvm/nvm.sh; fi; "
+                    f"git config --global --add safe.directory "
+                    f"{shlex.quote(self.GRAFT_SOURCE)} && "
                     f"mkdir -p {shlex.quote(self.REMOTE_CODEX_HOME)} "
                     f"{shlex.quote(self.GRAFT_CONFIG_HOME)} "
                     f"{shlex.quote(self.GRAFT_STATE_HOME)} {shlex.quote(agent_dir)}"
