@@ -350,6 +350,35 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             "/logs/agent/graft-checkpoints",
         )
 
+    def test_second_causal_fallback_pair_is_frozen_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT / "configs" / "shadow-relay-graft-causal-r10.json"
+        )
+        native_path = EXPERIMENT_ROOT / "configs" / "shadow-relay-native-r10.json"
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/shadow-relay"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "4c8041c8d397dc5318d557a3e5ca41b5013a4af6",
+        )
+        self.assertEqual(
+            graft["agents"][0]["env"]["GRAFT_CHECKPOINT_ARCHIVE_HOME"],
+            "/logs/agent/graft-checkpoints",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -267,3 +267,10 @@ This choice was recorded before downloading or inspecting that task. Execution
 is again oracle, treatment, every checkpoint replay, Native, then hidden-detail
 inspection. If the official oracle is invalid, deterministic fallback advances
 to `shadow-relay` and then `wal-recovery-ordering`, wrapping as necessary.
+
+The `live-database-cutover` oracle was censored before agent execution: Docker
+rejected the task's requested CPU range because the available runtime exposes
+only eight CPUs. No task content or verifier details were inspected. Per the
+frozen fallback rule, the next task is `terminal-bench/shadow-relay`; its GRAFT
+and Native configurations were committed before downloading or inspecting the
+task.
