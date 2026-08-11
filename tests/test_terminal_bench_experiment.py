@@ -188,6 +188,19 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertEqual(retry2["agents"], graft["agents"])
         self.assertNotIn(retry2["job_name"], {graft["job_name"], retry["job_name"]})
 
+        retry3_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "risk-scorer-replay-graft-grounded-r10-retry3.json"
+        )
+        retry3 = json.loads(retry3_path.read_text(encoding="utf-8"))
+        self.assertEqual(retry3["datasets"], graft["datasets"])
+        self.assertEqual(retry3["agents"], graft["agents"])
+        self.assertNotIn(
+            retry3["job_name"],
+            {graft["job_name"], retry["job_name"], retry2["job_name"]},
+        )
+
     def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
         source = (
             EXPERIMENT_ROOT / "graft_original_codex_agent.py"

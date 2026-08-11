@@ -83,6 +83,9 @@ class GraftOriginalCodex(NativeCodex):
                 'mv "$codex_bin" "${codex_bin}-real" && '
                 "printf '%s\\n' "
                 "'#!/bin/sh' "
+                "'if [ -r \"${CODEX_HOME:-}/auth.json\" ]; then' "
+                "'  sha256sum \"$CODEX_HOME/auth.json\" > /logs/agent/codex-auth.sha256' "
+                "'fi' "
                 "'if [ \"$1\" = \"exec\" ]; then' "
                 "'  shift' "
                 "'  exec '" + '"${codex_bin}-real"' + "' exec --dangerously-bypass-hook-trust \"$@\"' "
