@@ -110,6 +110,35 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             graft["agents"][0]["kwargs"]["graft_commit"], r"^[0-9a-f]{40}$"
         )
 
+    def test_authority_fix_bun_pilot_is_frozen_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "bun-sourcemap-leak-graft-authority-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "bun-sourcemap-leak-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/bun-sourcemap-leak"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "69ea03a1004efd5fdb36625ad9a7e4aef17d62eb",
+        )
+
     def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
         source = (
             EXPERIMENT_ROOT / "graft_original_codex_agent.py"
