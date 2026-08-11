@@ -139,6 +139,35 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             "69ea03a1004efd5fdb36625ad9a7e4aef17d62eb",
         )
 
+    def test_grounded_runtime_risk_scorer_pair_is_frozen_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "risk-scorer-replay-graft-grounded-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "risk-scorer-replay-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/risk-scorer-replay"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "b0cde37f1eb7b484d35e1bf41934d24bd003272b",
+        )
+
     def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
         source = (
             EXPERIMENT_ROOT / "graft_original_codex_agent.py"

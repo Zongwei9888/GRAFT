@@ -4,14 +4,16 @@ This directory contains reproducible Harbor adapters for `Native Codex` and
 `Codex + GRAFT`. Hidden tests run only after the agent has stopped and are never
 available to GRAFT's online graph builder, selector, or verifiers.
 
-The current treatment is GRAFT Original v0.5: no task profile, command list,
+The current treatment is profile-free GRAFT Original: no task profile, command list,
 fixture, or benchmark-specific verifier is installed. At a changed Stop
 checkpoint, the plugin derives Behaviors and Failure Modes from the raw public
 instruction and workspace, retrieves task-specific verifier candidates from
 four domain-neutral capability templates, models their shared lineage, and
-selects a set under budget. Only a failure observed in the authoritative runtime
-or by an unchanged baseline-repository oracle is returned to the same Codex
-session; source review and verifier-generated tests remain advisory.
+selects a set under budget. A failure observed in the authoritative runtime, by
+an unchanged baseline-repository oracle, or by a numbered-requirement-derived
+test executed against the actual candidate can be returned to the same Codex
+session. Source review, generated substitute implementations, and mocks remain
+advisory.
 
 ## Requirements
 
@@ -23,12 +25,11 @@ session; source review and verifier-generated tests remain advisory.
 Raw jobs under `experiments/terminal_bench/jobs/` are ignored by Git because
 they contain local execution metadata and may contain sensitive agent logs.
 
-## GRAFT Original v0.5 pilots
+## Profile-free GRAFT Original pilots
 
-The first no-profile pilot used the CPU-only Terminal-Bench 3 task
-`terminal-bench/html-js-filter`. The second used
-`terminal-bench/payments-pipeline-fix`; both have frozen matched native configs
-under `configs/` and complete negative-result analyses in `RESULTS.md`.
+The completed no-profile pilots and their matched native controls are frozen
+under `configs/`, with complete negative-result analyses in `RESULTS.md`.
+Prospective configurations are committed before their corresponding jobs run.
 
 The first task was pinned as follows:
 
