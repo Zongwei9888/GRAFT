@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shlex
 from typing import override
 
@@ -35,9 +36,14 @@ class GraftOriginalCodex(NativeCodex):
     def __init__(
         self,
         *args,
+        graft_commit: str | None = None,
         extra_env: dict[str, str] | None = None,
         **kwargs,
     ) -> None:
+        resolved_commit = graft_commit or self.GRAFT_COMMIT
+        if re.fullmatch(r"[0-9a-f]{40}", resolved_commit) is None:
+            raise ValueError("graft_commit must be a full lowercase Git SHA")
+        self.graft_commit = resolved_commit
         merged_env = dict(extra_env or {})
         merged_env.setdefault("GRAFT_CONFIG_HOME", self.GRAFT_CONFIG_HOME)
         merged_env.setdefault("GRAFT_STATE_HOME", self.GRAFT_STATE_HOME)
@@ -61,9 +67,9 @@ class GraftOriginalCodex(NativeCodex):
                 f"git clone {shlex.quote(self.GRAFT_REPOSITORY)} "
                 f"{shlex.quote(self.GRAFT_SOURCE)} && "
                 f"git -C {shlex.quote(self.GRAFT_SOURCE)} checkout --detach "
-                f"{shlex.quote(self.GRAFT_COMMIT)} && "
+                f"{shlex.quote(self.graft_commit)} && "
                 f"test \"$(git -C {shlex.quote(self.GRAFT_SOURCE)} rev-parse HEAD)\" = "
-                f"{shlex.quote(self.GRAFT_COMMIT)}"
+                f"{shlex.quote(self.graft_commit)}"
             ),
         )
         # Harbor already executes Codex in a disposable Docker environment. The

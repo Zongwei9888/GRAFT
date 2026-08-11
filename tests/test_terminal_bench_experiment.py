@@ -68,8 +68,47 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             graft["datasets"][0]["task_names"],
             ["terminal-bench/html-js-filter"],
         )
-        for field in ("model_name", "kwargs"):
-            self.assertEqual(graft["agents"][0][field], native["agents"][0][field])
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "2ecea330faa0fce9b4e86688d831f22d73d80ace",
+        )
+
+    def test_postfix_payments_pilot_has_a_matched_native_control(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "payments-pipeline-fix-graft-original-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "payments-pipeline-fix-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/payments-pipeline-fix"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertRegex(
+            graft["agents"][0]["kwargs"]["graft_commit"], r"^[0-9a-f]{40}$"
+        )
 
     def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
         source = (
