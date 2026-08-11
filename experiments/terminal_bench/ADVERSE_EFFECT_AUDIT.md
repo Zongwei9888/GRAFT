@@ -239,3 +239,31 @@ after oracle, treatment, replay, and Native had all finished.
 The H7–H9 corrections were designed after this result and are not credited to
 this treatment. They must be committed and evaluated on a different unseen
 task before any effectiveness claim.
+
+## Pre-registered second causal pilot
+
+The H7–H9 generic corrections are frozen at commit
+`4c8041c8d397dc5318d557a3e5ca41b5013a4af6`. Previously executed or censored
+tasks are removed from the eligible set, leaving:
+
+```text
+batched-eval-parity
+kv-live-surgery
+live-database-cutover
+shadow-relay
+wal-recovery-ordering
+```
+
+The second seed is the dataset digest without `sha256:` followed by
+`:causal-pilot-2`. Its SHA-256 is
+`c87e31630ccf5c05a1c954b0ae333ca0d2ba4b6c9d65d908eeec53533d98dc4b`.
+Interpreting it as an integer modulo five selects index two of the sorted list:
+
+```text
+task: terminal-bench/live-database-cutover
+```
+
+This choice was recorded before downloading or inspecting that task. Execution
+is again oracle, treatment, every checkpoint replay, Native, then hidden-detail
+inspection. If the official oracle is invalid, deterministic fallback advances
+to `shadow-relay` and then `wal-recovery-ordering`, wrapping as necessary.
