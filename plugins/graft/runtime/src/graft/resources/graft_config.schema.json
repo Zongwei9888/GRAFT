@@ -109,6 +109,7 @@
         "cost": {"type": "number", "minimum": 0},
         "timeout_s": {"type": "number", "exclusiveMinimum": 0},
         "sandbox": {"type": "string", "enum": ["read-only", "workspace-write"]},
+        "network_access": {"type": "boolean"},
         "isolation": {"type": "string", "enum": ["ephemeral", "temporary-copy"]},
         "max_instances": {"type": "integer", "minimum": 1},
         "blocking": {"type": "boolean"},

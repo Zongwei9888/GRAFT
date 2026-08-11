@@ -85,6 +85,8 @@ class CliCodexRunner:
             args.extend(("-C", str(repo.resolve())))
         if include_sandbox:
             args.extend(("--sandbox", config.sandbox))
+            if config.sandbox == "workspace-write" and config.network_access:
+                args.extend(("-c", "sandbox_workspace_write.network_access=true"))
         if config.model:
             args.extend(("--model", config.model))
         if config.ephemeral:

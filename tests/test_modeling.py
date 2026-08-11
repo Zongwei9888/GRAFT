@@ -6,15 +6,16 @@ import unittest
 from pathlib import Path
 
 from graft.evidence.snapshot import freeze_source
-from graft.modeling import CodexFeedbackGraphBuilder
+from graft.modeling import CodexFeedbackGraphBuilder, FeedbackGraphBuildError
 from graft.project_config import initialize_project
 from graft.registry import load_config
 from graft.schema import TurnResult
 
 
 class StructuredRunner:
-    def __init__(self) -> None:
+    def __init__(self, *, duplicate_candidate: bool = False) -> None:
         self.calls = []
+        self.duplicate_candidate = duplicate_candidate
 
     def start_thread(self, prompt, repo, config):
         self.calls.append((prompt, repo, config))
@@ -45,9 +46,8 @@ class StructuredRunner:
                 "uncertainties": [],
             }
         else:
-            response = {
-                "candidates": [
-                    {
+            candidates = [
+                {
                         "id": "visual-runtime-probe",
                         "template_id": "agentic-evidence-reviewer",
                         "target_failure_modes": ["f-empty-frame"],
@@ -59,8 +59,12 @@ class StructuredRunner:
                         "additional_context_sources": ["runtime frame"],
                         "additional_modalities": ["visual"],
                         "oracle": "observed rendered output",
-                    }
-                ],
+                }
+            ]
+            if self.duplicate_candidate:
+                candidates.append({**candidates[0], "id": "visual-runtime-probe-2"})
+            response = {
+                "candidates": candidates,
                 "shared_blind_spots": [],
                 "coverage_gaps": [],
             }
@@ -107,6 +111,33 @@ class ModelingTests(unittest.TestCase):
                 self.assertTrue(run_config.isolate_config)
                 self.assertTrue(run_config.disable_hooks)
                 self.assertTrue(run_config.skip_git_repo_check)
+            self.assertIn("candidate-modified files", runner.calls[0][0])
+            self.assertIn("must never introduce a new", runner.calls[0][0])
+
+    def test_shared_lineage_without_a_blind_spot_model_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.bin").write_bytes(b"candidate")
+            config_path = initialize_project(root).path
+            config = load_config(config_path)
+            requirement = "Render the requested scene"
+            snapshot = freeze_source(
+                root,
+                requirements=(requirement,),
+                config_path=config_path,
+                environment_fingerprint=config.environment_fingerprint,
+            )
+            with self.assertRaisesRegex(
+                FeedbackGraphBuildError, "high-order blind-spot"
+            ):
+                CodexFeedbackGraphBuilder(
+                    codex_runner=StructuredRunner(duplicate_candidate=True)
+                ).build(
+                    snapshot,
+                    (requirement,),
+                    config,
+                    config_path=config_path,
+                )
 
 
 if __name__ == "__main__":

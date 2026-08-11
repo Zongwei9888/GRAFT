@@ -3,14 +3,8 @@
   "title": "GRAFT verifier verdict",
   "type": "object",
   "properties": {
-    "verdict": {
-      "type": "string",
-      "enum": ["pass", "fail", "abstain", "error"]
-    },
-    "failure_modes": {
-      "type": "array",
-      "items": {"type": "string"}
-    },
+    "verdict": {"type": "string", "enum": ["pass", "fail", "abstain", "error"]},
+    "failure_modes": {"type": "array", "items": {"type": "string"}},
     "summary": {"type": "string"},
     "evidence": {
       "type": "array",
@@ -20,17 +14,34 @@
           "kind": {"type": "string"},
           "path": {"type": ["string", "null"]},
           "line": {"type": ["integer", "null"], "minimum": 1},
-          "command": {
-            "type": "array",
-            "items": {"type": "string"}
-          },
-          "observation": {"type": "string"}
+          "command": {"type": "array", "items": {"type": "string"}},
+          "observation": {"type": "string"},
+          "failure_modes": {"type": "array", "items": {"type": "string"}},
+          "oracle_origin": {
+            "type": "string",
+            "enum": [
+              "authoritative_runtime",
+              "baseline_repository",
+              "candidate_repository",
+              "verifier_generated",
+              "source_inspection",
+              "unavailable"
+            ]
+          }
         },
-        "required": ["kind", "path", "line", "command", "observation"],
+        "required": [
+          "kind",
+          "path",
+          "line",
+          "command",
+          "observation",
+          "failure_modes",
+          "oracle_origin"
+        ],
         "additionalProperties": false
       }
     },
-    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     "reproducible": {"type": "boolean"}
   },
   "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible"],

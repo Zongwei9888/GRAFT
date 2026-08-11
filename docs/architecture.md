@@ -45,7 +45,11 @@ Security boundaries:
 - project overrides require an exact trusted config hash;
 - model stages run in fresh ephemeral threads with hooks/user config/rules isolated;
 - writable verifier agents use disposable copies;
-- model-only suspicions remain unresolved without an observed reproducer;
+- task-start per-file hashes separate unchanged baseline oracles from candidate-authored artifacts;
+- model-only suspicions, generated mocks, candidate checks, and source-display commands cannot
+  become blocking evidence; an authoritative runtime observation or unchanged baseline oracle is
+  required;
+- verifier network access is off by default and requires a reviewed project opt-in;
 - verifier execution must leave the producer checkpoint unchanged;
 - evidence produced for one source hash cannot gate another.
 

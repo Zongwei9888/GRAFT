@@ -15,9 +15,29 @@
           "path": {"type": ["string", "null"]},
           "line": {"type": ["integer", "null"], "minimum": 1},
           "command": {"type": "array", "items": {"type": "string"}},
-          "observation": {"type": "string"}
+          "observation": {"type": "string"},
+          "failure_modes": {"type": "array", "items": {"type": "string"}},
+          "oracle_origin": {
+            "type": "string",
+            "enum": [
+              "authoritative_runtime",
+              "baseline_repository",
+              "candidate_repository",
+              "verifier_generated",
+              "source_inspection",
+              "unavailable"
+            ]
+          }
         },
-        "required": ["kind", "path", "line", "command", "observation"],
+        "required": [
+          "kind",
+          "path",
+          "line",
+          "command",
+          "observation",
+          "failure_modes",
+          "oracle_origin"
+        ],
         "additionalProperties": false
       }
     },

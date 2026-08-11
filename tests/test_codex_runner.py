@@ -29,6 +29,22 @@ class CodexRunnerTests(unittest.TestCase):
         )
         self.assertEqual(result.thread_id, "thread-resumed")
 
+    def test_workspace_network_access_is_an_explicit_codex_config_override(self) -> None:
+        args = self.runner._common_args(
+            RunConfig(sandbox="workspace-write", network_access=True),
+            repo=self.repo,
+            include_sandbox=True,
+            include_color=False,
+        )
+        self.assertIn("sandbox_workspace_write.network_access=true", args)
+        read_only = self.runner._common_args(
+            RunConfig(sandbox="read-only", network_access=True),
+            repo=self.repo,
+            include_sandbox=True,
+            include_color=False,
+        )
+        self.assertNotIn("sandbox_workspace_write.network_access=true", read_only)
+
 
 if __name__ == "__main__":
     unittest.main()

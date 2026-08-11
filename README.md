@@ -74,6 +74,10 @@ graft config disable             # off only here
 graft config enable
 ```
 
+Verifier network access is off by default. Environments whose authoritative runtime services are
+reachable only over the network may opt in with `graft init --verifier-network-access`; the
+generated configuration must still be reviewed and hash-trusted.
+
 A repository configuration is ignored until its exact hash is trusted. An untrusted override
 falls back to the built-in dynamic GRAFT Original registry; it never falls back to a task-specific
 command list.
@@ -88,7 +92,8 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
 3. `Stop` freezes the current source state. A producer message such as “done” is not treated as
    evidence and is not classified by task-specific keywords.
 4. A read-only ephemeral model call builds Behaviors and Failure Modes from requirements,
-   repository rules, state, and diff.
+   unchanged baseline repository rules, state, and diff. Candidate-added or modified files cannot
+   introduce a new contract.
 5. A second isolated structured call instantiates verifier candidates from general capabilities,
    estimates task-conditional detection, and describes high-order shared blind spots.
 6. The selector greedily maximizes risk-weighted expected detection per unit cost, with a best
@@ -97,9 +102,9 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
 7. Selected reviewers and agents run in fresh isolated sessions. A repository-evidence agent can
    derive one direct argv check from visible project declarations, and writable verifier agents
    work only in disposable copies.
-8. Only reproducible blocking evidence continues the producer Codex session. Errors, abstentions,
-   capability gaps, or unsupported model suspicions are `unresolved`, never silently converted to
-   passes.
+8. Only an observed authoritative-runtime failure or an unchanged baseline-repository oracle can
+   continue the producer Codex session. Generated mocks, candidate-authored checks, source-review
+   suspicions, errors, abstentions, and capability gaps do not become blocking evidence.
 
 Reports are source-bound and stored outside arbitrary target repositories in the platform's GRAFT
 state directory. The original producer workspace is checked again after verification so stale
@@ -140,8 +145,10 @@ suppressed, and feedback rounds are bounded.
 
 The implementation exercises the frozen method, but its task-conditional probability estimates
 are model estimates until calibrated on held-out tasks. Hidden benchmark labels must remain outside
-the online selector. The hand-authored Terminal-Bench profile under `experiments/terminal_bench/`
-is retained as a reproducible negative experiment and is rejected by the v2 product loader.
+the online selector. The first two profile-free dynamic Terminal-Bench 3 pairs were negative
+(Native Codex 2/2, Codex + GRAFT 0/2); see the
+[recorded results](experiments/terminal_bench/RESULTS.md). The implementation is therefore a
+research prototype, not an established quality improvement.
 
 Claims suitable for WSDM 2027 still require paired multi-task evaluation, calibration studies,
 lineage ablations, budget curves, and comparison with native Codex, fixed checklists, single
@@ -152,8 +159,9 @@ reviewers, pairwise diversity, and run-all verification.
 - graph construction and semantic reviewers are fresh, read-only, ephemeral Codex sessions with
   hooks, user config, and repository rules disabled for isolation;
 - writable test agents run only in disposable workspace copies;
-- a model cannot make a blocking claim reproducible merely by setting a JSON flag—GRAFT also
-  requires an observed command or runtime/state artifact;
+- a model cannot make a blocking claim reproducible merely by setting a JSON flag or executing a
+  source-display command—GRAFT requires an authoritative runtime artifact or an unchanged
+  baseline-repository oracle mapped to the claimed failure mode;
 - verifier findings are bound to the exact requirement/config/workspace checkpoint;
 - failure policy defaults to fail-open with an explicit unresolved warning;
 - the selector never sees hidden benchmark outcomes.

@@ -61,6 +61,25 @@ class SnapshotTests(unittest.TestCase):
             relevant = freeze_source(root)
             self.assertNotEqual(ignored.tree_hash, relevant.tree_hash)
 
+    def test_baseline_manifest_distinguishes_modified_and_added_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "contract.md").write_text("original\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            (root / "contract.md").write_text("candidate claim\n", encoding="utf-8")
+            (root / "new_test.py").write_text("assert True\n", encoding="utf-8")
+            current = freeze_source(
+                root,
+                baseline_tree_hash=baseline.tree_hash,
+                baseline_files=baseline.files,
+                baseline_file_hashes=baseline.file_hashes,
+            )
+            self.assertNotEqual(
+                current.file_hashes["contract.md"],
+                current.baseline_file_hashes["contract.md"],
+            )
+            self.assertNotIn("new_test.py", current.baseline_file_hashes)
+
 
 if __name__ == "__main__":
     unittest.main()

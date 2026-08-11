@@ -89,6 +89,13 @@ def _parser() -> argparse.ArgumentParser:
         choices=("completion", "strict", "explicit"),
         default="completion",
     )
+    initialize.add_argument(
+        "--verifier-network-access",
+        action="store_true",
+        help=(
+            "Allow workspace-write verifier agents to access the network; disabled by default"
+        ),
+    )
     initialize.add_argument("--force", action="store_true")
 
     status = subparsers.add_parser(
@@ -242,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
             result = initialize_project(
                 workspace,
                 checkpoint_mode=args.checkpoint_mode,
+                verifier_network_access=args.verifier_network_access,
                 force=args.force,
             )
         except (FileExistsError, ValueError) as exc:

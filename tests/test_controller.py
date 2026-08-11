@@ -69,7 +69,13 @@ class Executor:
 
     def run(self, spec, snapshot, **kwargs):
         evidence = (
-            EvidenceItem("command", "observed mismatch", command=("check-value",)),
+            EvidenceItem(
+                "command",
+                "observed mismatch",
+                command=("check-value",),
+                failure_modes=("f1",),
+                oracle_origin="authoritative_runtime",
+            ),
         ) if self.verdict == Verdict.FAIL else ()
         return VerifierResult(
             verifier_id=spec.verifier_id,

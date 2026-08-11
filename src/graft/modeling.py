@@ -88,10 +88,9 @@ class CodexFeedbackGraphBuilder:
         if len(verifiers) > 1 and not blind_spots:
             shared = _all_shared_sources(verifiers)
             if shared:
-                uncertainties += (
-                    "lineage_uncertainty: verifier planner returned no explicit high-order "
-                    "blind-spot scenario despite shared lineage: "
-                    f"{', '.join(shared)}",
+                raise FeedbackGraphBuildError(
+                    "verifier planner omitted the required high-order blind-spot model for "
+                    f"shared lineage: {', '.join(shared)}"
                 )
         return FeedbackGraph(
             source_hash=snapshot.checkpoint_key,
@@ -163,15 +162,28 @@ def _behavior_prompt(
     snapshot: SourceSnapshot, requirements: tuple[str, ...]
 ) -> str:
     requirements_text = "\n".join(f"- {item}" for item in requirements) or "- <missing>"
+    changed = _candidate_changed_files(snapshot)
+    changed_text = (
+        "\n".join(f"- {item}" for item in changed)
+        if changed is not None
+        else "- <baseline manifest unavailable>"
+    )
+    if changed == ():
+        changed_text = "- <none>"
     return f"""You are the structured Behavior and Failure-Mode constructor for GRAFT Original.
 
 Model the current task, not a generic programming checklist. Read the raw user requirements below,
 inspect the observable repository state and current working-tree changes, and identify what must be
 true for this particular result to be correct. Do not trust or reconstruct the producer agent's
-private reasoning. Ground every Behavior in raw requirements, repository rules, observable state,
-or the candidate diff. Derive concrete, task-specific Failure Modes and the capabilities needed to
-observe them. Do not limit the analysis to the programming language, framework, or test suite that
-happens to be present. If an important behavior cannot be verified with available repository state,
+private reasoning. Raw user requirements are the authoritative task contract. Baseline repository
+tests, documentation, schemas, and rules may clarify that contract, but candidate-added or
+candidate-modified files are implementation evidence only: they must never introduce a new
+requirement, precondition, protocol invariant, or oracle. In particular, do not turn an
+implementation assumption into a Behavior by demanding stricter input ordering or lifecycle
+semantics than the raw task or baseline repository establishes. Candidate source and diff may
+suggest Failure Modes, but every Behavior must remain traceable to the raw requirements or baseline
+contract. When the contract is ambiguous, record an uncertainty instead of choosing the stricter
+interpretation. If an important behavior cannot be verified with available repository state,
 record that uncertainty explicitly.
 
 Raw requirements:
@@ -180,10 +192,28 @@ Raw requirements:
 GRAFT content checkpoint hash (not a Git commit or ref): {snapshot.checkpoint_key}
 Repository root: {snapshot.root}
 Visible source entries: {len(snapshot.files)}
+Baseline tree hash: {snapshot.baseline_tree_hash or '<unavailable>'}
+Files added or modified after the task baseline (non-authoritative as contract sources):
+{changed_text}
 
 Use stable short identifiers. Scores are risk factors in [0,1]; Failure Mode risk may be in [0,2].
 Return only the schema-conforming object.
 """
+
+
+def _candidate_changed_files(snapshot: SourceSnapshot) -> tuple[str, ...] | None:
+    if not snapshot.baseline_tree_hash or not snapshot.baseline_file_hashes:
+        return None
+    baseline = snapshot.baseline_file_hashes
+    changed = {
+        path
+        for path, digest in snapshot.file_hashes.items()
+        if baseline.get(path) != digest
+    }
+    changed.update(
+        f"{path} (deleted)" for path in baseline if path not in snapshot.file_hashes
+    )
+    return tuple(sorted(changed))
 
 
 def _planner_prompt(
@@ -213,9 +243,11 @@ target concrete Failure Mode identifiers and receive a task-specific objective a
 detection probabilities conservatively. Explicitly identify higher-order shared blind spots caused
 by shared model, prompt, context, modality, test author, oracle, or task interpretation. Different
 candidate names or fresh threads are not evidence of independence. Report capability gaps instead
-of inventing unavailable tools. The repository-evidence agent discovers applicable project-owned
-commands later inside its sandboxed disposable copy; the planner must not emit commands or
-task-specific hardcoded fixtures.
+of inventing unavailable tools. If two or more candidates share any material lineage source, the
+plan MUST contain at least one shared_blind_spots entry covering the affected group; a zero-edge
+plan with shared model/context lineage is invalid. The repository-evidence agent discovers
+applicable project-owned commands later inside its sandboxed disposable copy; the planner must not
+emit commands or task-specific hardcoded fixtures.
 
 Raw requirements:
 {requirements_text}
@@ -386,6 +418,7 @@ def _parse_verifier_plan(
                 estimated_detection=detection,
                 timeout_s=template.timeout_s,
                 sandbox=template.sandbox,
+                network_access=template.network_access,
                 isolation=template.isolation,
                 model=template.model,
                 command=template.command,

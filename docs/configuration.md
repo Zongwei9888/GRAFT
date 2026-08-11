@@ -18,6 +18,19 @@ graft config trust
 graft status
 ```
 
+Network access for verifier agents is disabled by default. If the authoritative runtime under test
+is a network service, initialize explicitly with:
+
+```bash
+graft init --verifier-network-access
+graft config validate
+graft config trust
+```
+
+This enables network access only for workspace-write verifier templates; read-only semantic model
+stages remain network-disabled. Treat it as an environment capability and security decision, not a
+task-specific verifier.
+
 `graft init` writes the same general registry locally so a project can version its chosen budget,
 models, sandbox policy, or verifier capabilities. Any edit revokes trust automatically. Until it is
 trusted again, GRAFT ignores the file and uses the general built-in registry.
@@ -39,6 +52,7 @@ graft config enable
 | `failure_policy` | `open` warns on unresolved; `closed` continues on unresolved |
 | `modeling` | Models, timeouts, and prompt-family provenance for graph construction |
 | `verifier_templates` | General capabilities and isolation policy, not task instances |
+| `verifier_templates[].network_access` | Explicit network policy for a verifier sandbox |
 | `selection` | Hypergraph selector and residual-risk thresholds |
 
 The runtime modeler creates Behaviors and Failure Modes. The planner creates concrete verifier IDs,
@@ -64,9 +78,10 @@ config directory or `GRAFT_CONFIG_HOME`.
 
 ## State and privacy
 
-Raw user prompts are retained locally to reconstruct multi-turn requirements. Tool inputs and
-responses are stored only as hashes. Reports contain model-derived task structures and evidence, so
-the state directory remains user-private.
+Raw user prompts and the task-start per-file hash manifest are retained locally to reconstruct
+multi-turn requirements and distinguish baseline authority from candidate-authored artifacts. Tool
+inputs and responses are stored only as hashes. Reports contain model-derived task structures and
+evidence, so the state directory remains user-private.
 
 - macOS: `~/Library/Application Support/GRAFT/`;
 - Linux: `~/.local/state/graft/`;

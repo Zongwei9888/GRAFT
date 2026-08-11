@@ -5,7 +5,7 @@ import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from graft.schema import SourceSnapshot
 
@@ -133,17 +133,33 @@ def hash_tree(
     excluded_dirs: frozenset[str] = DEFAULT_EXCLUDED_DIRS,
     excluded_files: frozenset[str] = DEFAULT_EXCLUDED_FILES,
 ) -> tuple[str, tuple[str, ...]]:
+    tree_hash, files, _ = hash_tree_manifest(
+        root,
+        excluded_dirs=excluded_dirs,
+        excluded_files=excluded_files,
+    )
+    return tree_hash, files
+
+
+def hash_tree_manifest(
+    root: Path,
+    *,
+    excluded_dirs: frozenset[str] = DEFAULT_EXCLUDED_DIRS,
+    excluded_files: frozenset[str] = DEFAULT_EXCLUDED_FILES,
+) -> tuple[str, tuple[str, ...], dict[str, str]]:
     resolved = root.resolve()
     if not resolved.is_dir():
         raise ValueError(f"Workspace is not a directory: {resolved}")
 
     digest = hashlib.sha256()
     names: list[str] = []
+    manifest: dict[str, str] = {}
     entries = _iter_git_entries(resolved, excluded_dirs, excluded_files)
     if entries is None:
         entries = _iter_source_entries(resolved, excluded_dirs, excluded_files)
     for relative, path in entries:
         names.append(relative)
+        entry_digest = hashlib.sha256()
         relative_bytes = relative.encode("utf-8", errors="surrogatepass")
         digest.update(len(relative_bytes).to_bytes(8, "big"))
         digest.update(relative_bytes)
@@ -152,18 +168,26 @@ def hash_tree(
             digest.update(b"L")
             digest.update(len(target).to_bytes(8, "big"))
             digest.update(target)
+            entry_digest.update(b"L")
+            entry_digest.update(target)
+            manifest[relative] = entry_digest.hexdigest()
             continue
         try:
             stat = path.stat()
             digest.update(b"F")
             digest.update(stat.st_size.to_bytes(8, "big"))
+            entry_digest.update(b"F")
+            entry_digest.update(stat.st_size.to_bytes(8, "big"))
             with path.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                     digest.update(chunk)
+                    entry_digest.update(chunk)
         except (FileNotFoundError, PermissionError, OSError) as exc:
             marker = f"UNREADABLE:{type(exc).__name__}".encode("utf-8")
             digest.update(marker)
-    return digest.hexdigest(), tuple(names)
+            entry_digest.update(marker)
+        manifest[relative] = entry_digest.hexdigest()
+    return digest.hexdigest(), tuple(names), manifest
 
 
 def freeze_source(
@@ -172,12 +196,21 @@ def freeze_source(
     requirements: Sequence[str] = (),
     config_path: Path | None = None,
     environment_fingerprint: str = "local",
+    baseline_tree_hash: str | None = None,
+    baseline_files: Sequence[str] = (),
+    baseline_file_hashes: Mapping[str, str] | None = None,
 ) -> SourceSnapshot:
-    tree_hash, files = hash_tree(root)
+    tree_hash, files, file_hashes = hash_tree_manifest(root)
     requirement_hash = hash_texts(requirements)
     config_hash = hash_file(config_path)
     checkpoint_key = hash_texts(
-        (tree_hash, requirement_hash, environment_fingerprint, config_hash)
+        (
+            tree_hash,
+            requirement_hash,
+            environment_fingerprint,
+            config_hash,
+            baseline_tree_hash or "",
+        )
     )
     return SourceSnapshot(
         root=str(root.resolve()),
@@ -187,4 +220,8 @@ def freeze_source(
         checkpoint_key=checkpoint_key,
         files=files,
         created_at=datetime.now(timezone.utc).isoformat(),
+        baseline_tree_hash=baseline_tree_hash,
+        baseline_files=tuple(baseline_files),
+        file_hashes=file_hashes,
+        baseline_file_hashes=dict(baseline_file_hashes or {}),
     )

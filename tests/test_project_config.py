@@ -45,6 +45,19 @@ class ProjectConfigTests(unittest.TestCase):
             self.assertTrue(load_config(enabled.path).enabled)
             self.assertTrue(enabled.verifier_ids)
 
+    def test_verifier_network_access_is_explicit_and_limited_to_write_sandboxes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = initialize_project(
+                Path(directory), verifier_network_access=True
+            )
+            raw = json.loads(result.path.read_text(encoding="utf-8"))
+            by_id = {item["id"]: item for item in raw["verifier_templates"]}
+            self.assertTrue(by_id["repository-evidence-agent"]["network_access"])
+            self.assertTrue(by_id["agentic-evidence-reviewer"]["network_access"])
+            self.assertTrue(by_id["test-agent"]["network_access"])
+            self.assertFalse(by_id["semantic-reviewer"]["network_access"])
+            self.assertTrue(result.warnings)
+
 
 if __name__ == "__main__":
     unittest.main()

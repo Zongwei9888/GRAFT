@@ -27,6 +27,8 @@ class EvidenceItem:
     path: str | None = None
     line: int | None = None
     command: tuple[str, ...] = ()
+    failure_modes: tuple[str, ...] = ()
+    oracle_origin: str = "unspecified"
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,7 @@ class VerifierTemplate:
     cost: float
     timeout_s: float = 240.0
     sandbox: str = "read-only"
+    network_access: bool = False
     isolation: str = "ephemeral"
     max_instances: int = 1
     blocking: bool = True
@@ -130,6 +133,7 @@ class VerifierSpec:
     estimated_detection: Mapping[str, float] = field(default_factory=dict)
     timeout_s: float = 240.0
     sandbox: str = "read-only"
+    network_access: bool = False
     isolation: str = "ephemeral"
     model: str | None = None
     command: tuple[str, ...] = ()
@@ -168,6 +172,10 @@ class SourceSnapshot:
     checkpoint_key: str
     files: tuple[str, ...]
     created_at: str
+    baseline_tree_hash: str | None = None
+    baseline_files: tuple[str, ...] = ()
+    file_hashes: Mapping[str, str] = field(default_factory=dict)
+    baseline_file_hashes: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -226,6 +234,7 @@ class TurnResult:
 @dataclass(frozen=True)
 class RunConfig:
     sandbox: str = "workspace-write"
+    network_access: bool = False
     model: str | None = None
     timeout_s: float = 900.0
     ephemeral: bool = False

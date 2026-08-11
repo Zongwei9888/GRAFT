@@ -92,12 +92,18 @@ class HookReplayTests(unittest.TestCase):
                 (root / "source.py").write_text("value = 1\n", encoding="utf-8")
                 self._config(root)
                 self._prompt(root, "session-pass", "Change the value")
+                captured = SessionStateStore(root).load("session-pass")
+                self.assertIn("source.py", captured.baseline_file_hashes)
+                original_digest = captured.baseline_file_hashes["source.py"]
                 (root / "source.py").write_text("value = 2\n", encoding="utf-8")
                 result = self._stop(root, "session-pass", exit_code=0)
                 self.assertTrue(result["continue"])
                 session_state = SessionStateStore(root).load("session-pass")
                 self.assertEqual(session_state.status, "accepted")
                 self.assertIsNotNone(session_state.last_verified_checkpoint_key)
+                self.assertNotEqual(
+                    session_state.baseline_file_hashes["source.py"], original_digest
+                )
 
     def test_failure_continues_and_does_not_repeat_without_change(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:

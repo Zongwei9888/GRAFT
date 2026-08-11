@@ -76,6 +76,10 @@ graft status
 Plugin-only users can ask Codex: `Show the GRAFT status for this workspace`. No per-project
 initialization is required; the dynamic registry works in arbitrary directories.
 
+The default verifier sandbox has no network access. Projects that need verifiers to reach a live
+service can create and review an opt-in override with
+`graft init --verifier-network-access`, followed by `graft config trust`.
+
 ## Uninstall
 
 Plugin users remove the plugin with `codex plugin remove graft@graft`. Package users run:

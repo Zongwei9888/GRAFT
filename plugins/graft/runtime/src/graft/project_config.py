@@ -30,6 +30,7 @@ def initialize_project(
     workspace: Path,
     *,
     checkpoint_mode: str = "completion",
+    verifier_network_access: bool = False,
     force: bool = False,
 ) -> ProjectConfigResult:
     """Create a domain-neutral local override for GRAFT Original.
@@ -49,10 +50,22 @@ def initialize_project(
         )
     payload = default_original_config_payload()
     payload["checkpoint_mode"] = checkpoint_mode
+    if verifier_network_access:
+        for template in payload["verifier_templates"]:
+            if template.get("sandbox") == "workspace-write":
+                template["network_access"] = True
     target.parent.mkdir(parents=True, exist_ok=True)
     _atomic_json_write(target, payload)
     ids = tuple(str(item["id"]) for item in payload["verifier_templates"])
-    return ProjectConfigResult(target, True, ids, ())
+    warnings = (
+        (
+            "Workspace-write verifier agents may use outbound network access; review this "
+            "project configuration before trusting it.",
+        )
+        if verifier_network_access
+        else ()
+    )
+    return ProjectConfigResult(target, True, ids, warnings)
 
 
 def set_project_enabled(workspace: Path, enabled: bool) -> ProjectToggleResult:

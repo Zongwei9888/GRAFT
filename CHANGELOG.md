@@ -9,6 +9,14 @@ All notable changes follow semantic versioning.
 - give the dynamic behavior modeler 180 seconds of the existing 600-second Stop window after a
   Terminal-Bench pilot exposed timeouts on a large generated checkpoint;
 - add a profile-free, source-pinned Terminal-Bench 3 adapter and matched Native Codex control.
+- preserve a per-file task-baseline manifest so candidate-authored documentation, tests, and code
+  cannot be promoted into authoritative task contracts;
+- require LLM evidence to name its oracle origin and target failure modes, and permit blocking only
+  from observed authoritative runtime or unchanged baseline-repository evidence;
+- reject shared-lineage verifier plans that omit the frozen method's high-order blind-spot model;
+- add an explicit, reviewed opt-in for network access in workspace-write verifier sandboxes;
+- record a second negative profile-free Terminal-Bench 3 pair and its self-referential contract
+  failure without crediting the post-hoc correction as effectiveness evidence.
 
 ## 0.5.0 - 2026-08-10
 

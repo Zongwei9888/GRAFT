@@ -184,6 +184,7 @@ class VerifierExecutor:
                     run_root,
                     RunConfig(
                         sandbox=spec.sandbox,
+                        network_access=spec.network_access,
                         model=spec.model,
                         timeout_s=spec.timeout_s,
                         ephemeral=True,
@@ -218,21 +219,24 @@ class VerifierExecutor:
                     stdout=_trim(turn.final_response),
                     stderr=_trim(turn.stderr),
                 )
-            evidence = _parse_evidence(raw.get("evidence", []))
-            claimed_reproducible = bool(raw.get("reproducible", False))
-            observed_reproducer = _has_observed_reproducer(
-                evidence, turn.events, run_root
-            )
-            reproducible = (
-                verdict == Verdict.FAIL
-                and claimed_reproducible
-                and observed_reproducer
-            )
             reported_modes = tuple(
                 str(item) for item in raw.get("failure_modes", [])
             )
             valid_modes = tuple(
                 item for item in reported_modes if item in set(spec.failure_modes)
+            )
+            evidence = _parse_evidence(raw.get("evidence", []), set(valid_modes))
+            reproduced_modes = _blocking_reproduced_modes(
+                evidence,
+                turn.events,
+                run_root,
+                snapshot,
+            )
+            claimed_reproducible = bool(raw.get("reproducible", False))
+            reproducible = (
+                verdict == Verdict.FAIL
+                and claimed_reproducible
+                and bool(reproduced_modes)
             )
             summary = str(raw.get("summary", "Codex verifier completed."))
             confidence = float(raw.get("confidence", 0.0))
@@ -257,7 +261,7 @@ class VerifierExecutor:
             blocking=spec.blocking,
             reproducible=reproducible,
             duration_s=turn.duration_s,
-            failure_modes=valid_modes,
+            failure_modes=reproduced_modes if reproducible else valid_modes,
             evidence=evidence,
             stdout=stdout,
             stderr=stderr,
@@ -310,6 +314,14 @@ def _verifier_prompt(
         for item in targets
     )
     requirement_text = "\n".join(f"- {item}" for item in requirements)
+    changed = _candidate_changed_files(snapshot)
+    changed_text = (
+        "\n".join(f"- {item}" for item in changed)
+        if changed is not None
+        else "- <baseline manifest unavailable>"
+    )
+    if changed == ():
+        changed_text = "- <none>"
     mode = (
         "You may create temporary tests and artifacts because this is a disposable workspace copy."
         if spec.isolation == "temporary-copy"
@@ -335,13 +347,29 @@ Requirement hash: {snapshot.requirement_hash}
 Configuration hash: {snapshot.config_hash}
 Configuration source used by this run: {config_path}
 Environment fingerprint used by this run: {environment_fingerprint}
+Baseline tree hash: {snapshot.baseline_tree_hash or '<unavailable>'}
+Files added or modified after the task baseline:
+{changed_text}
 {mode}
 
 Inspect the actual repository and use tools when they can establish observable evidence. Do not
-trust the producer's summary. A code-review suspicion alone is not mechanically reproducible. If
-you report reproducible=true, include a command that you actually executed during this turn or an
-observed runtime/state artifact. Return only the schema-conforming verdict object. If the required
-capability or oracle is unavailable, abstain instead of guessing.
+trust the producer's summary. The raw requirements are authoritative. Baseline repository evidence
+may clarify them, but candidate-added files, generated tests, mocks, stubs, and source inspection
+cannot create a new contract or independently justify blocking feedback. Label every evidence item
+with its target failure_modes and one oracle_origin:
+- authoritative_runtime: the real task environment or user-visible artifact exhibited the failure;
+- baseline_repository: a test/oracle that existed before this task failed;
+- candidate_repository: a check or document added by the producer during this task;
+- verifier_generated: a test, mock, stub, or oracle you created;
+- source_inspection: static/code-review reasoning only;
+- unavailable: the needed oracle could not be reached.
+A code-review suspicion, successful source-inspection command, or generated stub counterexample is
+not mechanically reproducible blocking evidence. Only authoritative_runtime or baseline_repository
+evidence can support reproducible=true, and each such item must name the exact failure modes it
+reproduces plus a command actually executed or observed runtime artifact. If a precondition is not
+stated by the raw requirements or baseline contract, abstain instead of enforcing the stricter
+interpretation. Return only the schema-conforming verdict object. If the required capability or
+oracle is unavailable, abstain instead of guessing.
 """
 
 
@@ -383,7 +411,9 @@ def _producer_workspace_mutation(
     return None
 
 
-def _parse_evidence(raw_items: Any) -> tuple[EvidenceItem, ...]:
+def _parse_evidence(
+    raw_items: Any, valid_modes: set[str] | None = None
+) -> tuple[EvidenceItem, ...]:
     if not isinstance(raw_items, list):
         return ()
     result: list[EvidenceItem] = []
@@ -397,33 +427,96 @@ def _parse_evidence(raw_items: Any) -> tuple[EvidenceItem, ...]:
                 path=str(item["path"]) if item.get("path") else None,
                 line=int(item["line"]) if item.get("line") else None,
                 command=tuple(str(value) for value in item.get("command", [])),
+                failure_modes=tuple(
+                    str(value)
+                    for value in item.get("failure_modes", [])
+                    if valid_modes is None or str(value) in valid_modes
+                ),
+                oracle_origin=str(item.get("oracle_origin", "unspecified")),
             )
         )
     return tuple(result)
 
 
-def _has_observed_reproducer(
+def _blocking_reproduced_modes(
     evidence: tuple[EvidenceItem, ...],
     events: tuple[Mapping[str, Any], ...],
     run_root: Path,
-) -> bool:
+    snapshot: SourceSnapshot,
+) -> tuple[str, ...]:
     observed = _observed_commands(events)
+    reproduced: list[str] = []
     for item in evidence:
+        if item.oracle_origin not in {
+            "authoritative_runtime",
+            "baseline_repository",
+        }:
+            continue
+        observed_command = False
         if item.command:
             wanted = _normalize_command(item.command)
-            if any(wanted == command or wanted in command for command in observed):
-                return True
-        if item.kind in {"runtime", "state", "screenshot", "trace"} and item.path:
-            candidate = Path(item.path)
-            if not candidate.is_absolute():
-                candidate = run_root / candidate
-            try:
-                resolved = candidate.resolve()
-            except OSError:
-                continue
-            if (resolved == run_root or run_root in resolved.parents) and resolved.exists():
-                return True
-    return False
+            observed_command = any(
+                wanted == command or wanted in command for command in observed
+            )
+        observed_artifact = _observed_artifact(item, run_root)
+        if not observed_command and not observed_artifact:
+            continue
+        if (
+            item.oracle_origin == "baseline_repository"
+            and not _is_baseline_evidence(item, run_root, snapshot)
+        ):
+            continue
+        reproduced.extend(item.failure_modes)
+    return tuple(dict.fromkeys(reproduced))
+
+
+def _observed_artifact(item: EvidenceItem, run_root: Path) -> bool:
+    if item.kind not in {"runtime", "state", "screenshot", "trace"} or not item.path:
+        return False
+    candidate = Path(item.path)
+    if not candidate.is_absolute():
+        candidate = run_root / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return False
+    return (resolved == run_root or run_root in resolved.parents) and resolved.exists()
+
+
+def _is_baseline_evidence(
+    item: EvidenceItem, run_root: Path, snapshot: SourceSnapshot
+) -> bool:
+    if not snapshot.baseline_file_hashes or not item.path:
+        return False
+    candidate = Path(item.path)
+    try:
+        if candidate.is_absolute():
+            relative = candidate.resolve().relative_to(run_root.resolve())
+        else:
+            relative = candidate
+    except (OSError, ValueError):
+        return False
+    name = relative.as_posix()
+    return (
+        name in snapshot.baseline_file_hashes
+        and snapshot.file_hashes.get(name) == snapshot.baseline_file_hashes[name]
+    )
+
+
+def _candidate_changed_files(snapshot: SourceSnapshot) -> tuple[str, ...] | None:
+    if not snapshot.baseline_tree_hash or not snapshot.baseline_file_hashes:
+        return None
+    changed = {
+        path
+        for path, digest in snapshot.file_hashes.items()
+        if snapshot.baseline_file_hashes.get(path) != digest
+    }
+    changed.update(
+        f"{path} (deleted)"
+        for path in snapshot.baseline_file_hashes
+        if path not in snapshot.file_hashes
+    )
+    return tuple(sorted(changed))
 
 
 def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> tuple[str, ...]:

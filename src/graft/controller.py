@@ -5,6 +5,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from typing import Mapping
 
 from graft.evidence.snapshot import freeze_source
 from graft.modeling import (
@@ -58,13 +59,22 @@ class GraftController:
         )
 
     def snapshot(
-        self, repo: Path, requirements: tuple[str, ...] = ()
+        self,
+        repo: Path,
+        requirements: tuple[str, ...] = (),
+        *,
+        baseline_tree_hash: str | None = None,
+        baseline_files: tuple[str, ...] = (),
+        baseline_file_hashes: Mapping[str, str] | None = None,
     ) -> SourceSnapshot:
         return freeze_source(
             repo,
             requirements=requirements,
             config_path=self.config_path,
             environment_fingerprint=self.config.environment_fingerprint,
+            baseline_tree_hash=baseline_tree_hash,
+            baseline_files=baseline_files,
+            baseline_file_hashes=baseline_file_hashes,
         )
 
     def verify(
@@ -192,7 +202,13 @@ class GraftController:
                 session_id,
             )
 
-        current = self.snapshot(Path(source.root), requirements)
+        current = self.snapshot(
+            Path(source.root),
+            requirements,
+            baseline_tree_hash=source.baseline_tree_hash,
+            baseline_files=source.baseline_files,
+            baseline_file_hashes=source.baseline_file_hashes,
+        )
         if current.checkpoint_key != source.checkpoint_key:
             return self._finish(
                 Decision(
@@ -248,6 +264,9 @@ class GraftController:
                     " ".join(item.command)
                     for item in result.evidence
                     if item.command
+                    and item.oracle_origin
+                    in {"authoritative_runtime", "baseline_repository"}
+                    and set(item.failure_modes) & set(result.failure_modes)
                 ]
                 if result.command:
                     reproductions.append(" ".join(result.command))
@@ -255,6 +274,9 @@ class GraftController:
                     lines.append(f"  Reproduce: {reproductions[0]}")
             lines.append(
                 "Inspect and resolve the evidenced behavior. Choose the repair strategy yourself. "
+                "Preserve behaviors already established by the raw task and unchanged baseline "
+                "oracles; do not infer stricter preconditions or protocols than those sources "
+                "state. Rerun the same authoritative reproduction after the repair. "
                 "Do not invoke GRAFT verification manually; the lifecycle Stop hook will verify "
                 "the repaired checkpoint within the configured feedback-round budget."
             )

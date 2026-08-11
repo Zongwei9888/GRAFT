@@ -29,6 +29,8 @@ class SessionState:
     task_epoch: int = 1
     prompts: list[PromptRecord] = field(default_factory=list)
     baseline_tree_hash: str | None = None
+    baseline_files: list[str] = field(default_factory=list)
+    baseline_file_hashes: dict[str, str] = field(default_factory=dict)
     last_verified_checkpoint_key: str | None = None
     last_blocked_tree_hash: str | None = None
     last_feedback_hash: str | None = None
@@ -56,6 +58,11 @@ class SessionStateStore:
             task_epoch=int(raw.get("task_epoch", 1)),
             prompts=[PromptRecord(**item) for item in raw.get("prompts", [])],
             baseline_tree_hash=raw.get("baseline_tree_hash"),
+            baseline_files=[str(item) for item in raw.get("baseline_files", [])],
+            baseline_file_hashes={
+                str(path): str(digest)
+                for path, digest in raw.get("baseline_file_hashes", {}).items()
+            },
             last_verified_checkpoint_key=raw.get("last_verified_checkpoint_key"),
             last_blocked_tree_hash=raw.get("last_blocked_tree_hash"),
             last_feedback_hash=raw.get("last_feedback_hash"),
@@ -76,7 +83,12 @@ class SessionStateStore:
         os.replace(temporary, self._path(state.session_id))
 
     def record_prompt(
-        self, state: SessionState, prompt: str, current_tree_hash: str
+        self,
+        state: SessionState,
+        prompt: str,
+        current_tree_hash: str,
+        current_files: tuple[str, ...] = (),
+        current_file_hashes: dict[str, str] | None = None,
     ) -> str:
         digest = prompt_hash(prompt)
         origin = "graft" if digest == state.pending_feedback_hash else "user"
@@ -87,11 +99,15 @@ class SessionStateStore:
                 state.task_epoch += 1
                 state.prompts = []
                 state.baseline_tree_hash = current_tree_hash
+                state.baseline_files = list(current_files)
+                state.baseline_file_hashes = dict(current_file_hashes or {})
                 state.last_verified_checkpoint_key = None
                 state.verification_round = 0
                 state.status = "active"
             if state.baseline_tree_hash is None:
                 state.baseline_tree_hash = current_tree_hash
+                state.baseline_files = list(current_files)
+                state.baseline_file_hashes = dict(current_file_hashes or {})
         state.prompts.append(PromptRecord(prompt, digest, origin))
         self.save(state)
         return origin

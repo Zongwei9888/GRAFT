@@ -96,6 +96,7 @@ def _template(raw: Mapping[str, Any]) -> VerifierTemplate:
     timeout_s = float(raw.get("timeout_s", 240.0))
     max_instances = int(raw.get("max_instances", 1))
     sandbox = str(raw.get("sandbox", "read-only"))
+    network_access = bool(raw.get("network_access", False))
     isolation = str(raw.get("isolation", "ephemeral"))
     command = tuple_of_strings(raw.get("command"))
     if cost < 0:
@@ -131,6 +132,7 @@ def _template(raw: Mapping[str, Any]) -> VerifierTemplate:
         cost=cost,
         timeout_s=timeout_s,
         sandbox=sandbox,
+        network_access=network_access,
         isolation=isolation,
         max_instances=max_instances,
         blocking=bool(raw.get("blocking", True)),
@@ -239,7 +241,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
         "checkpoint_mode": "completion",
         "max_feedback_rounds": 2,
         "failure_policy": "open",
-        "environment_fingerprint": "graft-original-dynamic-v1",
+        "environment_fingerprint": "graft-original-dynamic-v2-authority",
         "modeling": {
             "behavior_modeler": {
                 "model": None,
@@ -271,6 +273,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
                     "cost": 1.25,
                     "timeout_s": 180,
                     "sandbox": "workspace-write",
+                    "network_access": False,
                     "isolation": "temporary-copy",
                     "max_instances": 2,
                     "blocking": True,
@@ -300,9 +303,10 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
                     "cost": 1.0,
                     "timeout_s": 120,
                     "sandbox": "read-only",
+                    "network_access": False,
                     "isolation": "ephemeral",
                     "max_instances": 2,
-                    "blocking": True,
+                    "blocking": False,
                     "model": None,
                     "lineage": {
                         "provider": "openai-codex",
@@ -318,14 +322,16 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
                     "kind": "codex_agent",
                     "role": "agentic environment and execution reviewer",
                     "instructions": (
-                        "Inspect the task and use available read-only tools to exercise relevant "
-                        "behavior. Prefer observed execution or state evidence over code style."
+                        "Inspect the task and exercise relevant behavior inside the disposable "
+                        "workspace copy. Prefer authoritative runtime or unchanged baseline "
+                        "repository evidence over code style or generated mocks."
                     ),
                     "capabilities": ["repository-search", "tool-execution", "runtime-evidence"],
                     "cost": 1.5,
                     "timeout_s": 180,
-                    "sandbox": "read-only",
-                    "isolation": "ephemeral",
+                    "sandbox": "workspace-write",
+                    "network_access": False,
+                    "isolation": "temporary-copy",
                     "max_instances": 2,
                     "blocking": True,
                     "model": None,
@@ -351,6 +357,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
                     "cost": 2.0,
                     "timeout_s": 240,
                     "sandbox": "workspace-write",
+                    "network_access": False,
                     "isolation": "temporary-copy",
                     "max_instances": 1,
                     "blocking": True,

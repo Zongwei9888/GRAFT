@@ -13,10 +13,52 @@ from graft.schema import (
     FailureMode,
     FeedbackGraph,
     Lineage,
+    TurnResult,
     VerifierSpec,
     Verdict,
 )
 from graft.verifiers import VerifierExecutor
+
+
+class EvidenceRunner:
+    def __init__(self, *, origin: str, path: str | None = None) -> None:
+        self.origin = origin
+        self.path = path
+
+    def start_thread(self, prompt, repo, config):
+        command = ["python", "baseline_test.py"]
+        response = {
+            "verdict": "fail",
+            "failure_modes": ["f"],
+            "summary": "observed mismatch",
+            "evidence": [
+                {
+                    "kind": "command",
+                    "path": self.path,
+                    "line": None,
+                    "command": command,
+                    "observation": "the check failed",
+                    "failure_modes": ["f"],
+                    "oracle_origin": self.origin,
+                }
+            ],
+            "confidence": 0.9,
+            "reproducible": True,
+        }
+        return TurnResult(
+            thread_id="verifier",
+            final_response=json.dumps(response),
+            events=(
+                {
+                    "type": "item.completed",
+                    "item": {"type": "command_execution", "command": command},
+                },
+            ),
+            usage={},
+            return_code=0,
+            stderr="",
+            duration_s=0.01,
+        )
 
 
 class CodexReviewerTests(unittest.TestCase):
@@ -71,6 +113,103 @@ class CodexReviewerTests(unittest.TestCase):
                 environment_fingerprint="test",
             )
             self.assertEqual(source.tree_hash, after.tree_hash)
+
+    def _run_evidence_case(
+        self,
+        root: Path,
+        *,
+        origin: str,
+        path: str | None,
+        baseline,
+    ):
+        config_path = root / "config.json"
+        source = freeze_source(
+            root,
+            requirements=("Keep the public behavior",),
+            config_path=config_path,
+            environment_fingerprint="test",
+            baseline_tree_hash=baseline.tree_hash,
+            baseline_files=baseline.files,
+            baseline_file_hashes=baseline.file_hashes,
+        )
+        failure = FailureMode("f", "b", "public behavior fails", "runtime", (), (), 1)
+        spec = VerifierSpec(
+            verifier_id="evidence-agent",
+            kind="codex_agent",
+            cost=1,
+            blocking=True,
+            failure_modes=("f",),
+            objective="exercise the public behavior",
+            prompt="use an authoritative oracle",
+            estimated_detection={"f": 0.8},
+            lineage=Lineage(provider="openai"),
+        )
+        graph = FeedbackGraph(
+            source.checkpoint_key,
+            (Behavior("b", "keep public behavior", (), ("result",), 1, 1, 0),),
+            (failure,),
+            (spec,),
+            (),
+        )
+        return VerifierExecutor(
+            codex_runner=EvidenceRunner(origin=origin, path=path)
+        ).run(
+            spec,
+            source,
+            requirements=("Keep the public behavior",),
+            graph=graph,
+            config_path=config_path,
+            environment_fingerprint="test",
+        )
+
+    def test_source_inspection_command_cannot_be_promoted_to_reproduction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "baseline_test.py").write_text("assert True\n", encoding="utf-8")
+            (root / "source.py").write_text("before\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            (root / "source.py").write_text("after\n", encoding="utf-8")
+            result = self._run_evidence_case(
+                root,
+                origin="source_inspection",
+                path="source.py",
+                baseline=baseline,
+            )
+            self.assertEqual(result.verdict, Verdict.FAIL)
+            self.assertFalse(result.reproducible)
+
+    def test_unchanged_baseline_oracle_can_support_blocking_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "baseline_test.py").write_text("assert True\n", encoding="utf-8")
+            (root / "source.py").write_text("before\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            (root / "source.py").write_text("after\n", encoding="utf-8")
+            result = self._run_evidence_case(
+                root,
+                origin="baseline_repository",
+                path="baseline_test.py",
+                baseline=baseline,
+            )
+            self.assertTrue(result.reproducible)
+            self.assertEqual(result.failure_modes, ("f",))
+
+    def test_candidate_modified_oracle_cannot_support_blocking_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "baseline_test.py").write_text("assert True\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            (root / "baseline_test.py").write_text("assert False\n", encoding="utf-8")
+            result = self._run_evidence_case(
+                root,
+                origin="baseline_repository",
+                path="baseline_test.py",
+                baseline=baseline,
+            )
+            self.assertFalse(result.reproducible)
 
 
 if __name__ == "__main__":

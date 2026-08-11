@@ -13,7 +13,7 @@ from graft.codex.event_dedup import claim_event
 from graft.codex.session_state import SessionStateStore, prompt_hash
 from graft.configuration import resolve_config
 from graft.controller import GraftController
-from graft.evidence.snapshot import hash_tree
+from graft.evidence.snapshot import hash_tree, hash_tree_manifest
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
 from graft.schema import DecisionKind
 
@@ -39,10 +39,10 @@ def user_prompt_submit() -> int:
     resolution = resolve_config(workspace)
     session_id = str(event.get("session_id", "unknown"))
     prompt = str(event.get("prompt", ""))
-    tree_hash, _ = hash_tree(workspace)
+    tree_hash, files, file_hashes = hash_tree_manifest(workspace)
     store = SessionStateStore(workspace, root=paths.state_dir)
     state = store.load(session_id)
-    store.record_prompt(state, prompt, tree_hash)
+    store.record_prompt(state, prompt, tree_hash, files, file_hashes)
     return _emit({"continue": True})
 
 
@@ -91,7 +91,13 @@ def stop() -> int:
             config_path=resolution.path,
             report_root=paths.reports_dir,
         )
-        snapshot = controller.snapshot(workspace, state.requirements)
+        snapshot = controller.snapshot(
+            workspace,
+            state.requirements,
+            baseline_tree_hash=state.baseline_tree_hash,
+            baseline_files=tuple(state.baseline_files),
+            baseline_file_hashes=state.baseline_file_hashes,
+        )
         action = DefaultCheckpointPolicy().evaluate(
             state,
             snapshot,
@@ -147,6 +153,8 @@ def stop() -> int:
         if decision.kind == DecisionKind.ALLOW:
             state.last_verified_checkpoint_key = snapshot.checkpoint_key
             state.baseline_tree_hash = snapshot.tree_hash
+            state.baseline_files = list(snapshot.files)
+            state.baseline_file_hashes = dict(snapshot.file_hashes)
             state.verification_round = 0
             state.status = "accepted"
             store.save(state)
