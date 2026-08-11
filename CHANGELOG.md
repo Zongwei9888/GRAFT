@@ -2,6 +2,14 @@
 
 All notable changes follow semantic versioning.
 
+## Unreleased
+
+- keep continuation re-verification inside the Stop hook so producer-side manual `cli verify`
+  calls cannot bypass `max_feedback_rounds`;
+- give the dynamic behavior modeler 180 seconds of the existing 600-second Stop window after a
+  Terminal-Bench pilot exposed timeouts on a large generated checkpoint;
+- add a profile-free, source-pinned Terminal-Bench 3 adapter and matched Native Codex control.
+
 ## 0.5.0 - 2026-08-10
 
 - freeze the original DOCX method as the authoritative implementation contract;

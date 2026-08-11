@@ -70,6 +70,14 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("matches", completed.stdout)
 
+    def test_skill_keeps_reverification_inside_the_stop_round_budget(self) -> None:
+        skill = (PLUGIN_ROOT / "skills" / "graft" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("never run `cli verify` in response", skill)
+        self.assertIn("Stop hook will verify", skill)
+        self.assertIn("max_feedback_rounds", skill)
+
     def test_launcher_works_without_checkout_pythonpath(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -119,6 +119,10 @@ PYTHONPATH=src python3 -m graft.cli verify \
   --requirement "Verify this exact task from its observable behavior"
 ```
 
+`cli verify` is a standalone diagnostic entry point. During an ordinary Codex task, repair any
+continuation evidence and let the Stop hook re-run automatically; invoking `cli verify` inside the
+producer thread would bypass the session's `max_feedback_rounds` budget.
+
 The compatibility installer for Codex builds without plugin support is:
 
 ```bash

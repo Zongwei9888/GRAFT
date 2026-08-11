@@ -254,7 +254,9 @@ class GraftController:
                 if reproductions:
                     lines.append(f"  Reproduce: {reproductions[0]}")
             lines.append(
-                "Inspect and resolve the evidenced behavior. Choose the repair strategy yourself."
+                "Inspect and resolve the evidenced behavior. Choose the repair strategy yourself. "
+                "Do not invoke GRAFT verification manually; the lifecycle Stop hook will verify "
+                "the repaired checkpoint within the configured feedback-round budget."
             )
             return Decision(
                 kind=DecisionKind.CONTINUE_WITH_EVIDENCE,

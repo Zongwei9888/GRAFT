@@ -20,6 +20,10 @@ built-in registry.
 Python 3.11+ and a compatible Codex CLI are required. After installation, review and trust the
 plugin commands through `/hooks`, then start a new Codex thread.
 
+The producer must not manually call `cli verify` after receiving continuation evidence. It should
+repair the checkpoint and finish the turn; the Stop hook owns re-verification and enforces the
+configured feedback-round budget. Manual verification is reserved for explicit user diagnostics.
+
 For source development:
 
 ```bash

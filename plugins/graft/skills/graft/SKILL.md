@@ -27,6 +27,12 @@ asks for a versioned project override of budgets, models, policies, or general v
 python3 <plugin-root>/scripts/graft_plugin.py cli init --repo .
 ```
 
+During an ordinary coding task, never run `cli verify` in response to GRAFT continuation
+evidence. Repair the evidenced behavior and finish the turn normally. The Stop hook will verify
+the new checkpoint automatically and enforce `max_feedback_rounds`; manual verification would
+bypass that session budget. Use `cli verify` only when the user explicitly asks for a standalone
+manual verification.
+
 Show the generated path and validation result before trusting a repository override:
 
 ```bash

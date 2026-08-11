@@ -121,6 +121,13 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(Path(decision.report_path or "").exists())
             self.assertIn("Violated behavior", decision.reason)
             self.assertIn("Reproduce", decision.reason)
+            self.assertIn("Do not invoke GRAFT verification manually", decision.reason)
+
+    def test_default_behavior_modeler_has_headroom_inside_stop_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = load_config(initialize_project(root).path)
+            self.assertEqual(config.behavior_modeler.timeout_s, 180)
 
     def test_passing_dynamic_verifier_allows_when_residual_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

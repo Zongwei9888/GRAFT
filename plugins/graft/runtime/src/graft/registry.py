@@ -243,7 +243,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
         "modeling": {
             "behavior_modeler": {
                 "model": None,
-                "timeout_s": 120,
+                "timeout_s": 180,
                 "prompt_family": "graft-original-behavior-v1",
             },
             "verifier_planner": {
