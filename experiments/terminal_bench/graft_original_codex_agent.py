@@ -128,14 +128,10 @@ class GraftOriginalCodex(NativeCodex):
                     f"graft_launcher=\"$(find {shlex.quote(self.REMOTE_CODEX_HOME)}"
                     "/plugins/cache/graft/graft -path '*/scripts/graft_plugin.py' "
                     "-type f | head -1)\" && test -n \"$graft_launcher\" && "
-                    f"python3 \"$graft_launcher\" cli init --repo "
-                    f"{shlex.quote(self.WORKSPACE)} --verifier-network-access > "
-                    f"{shlex.quote(agent_dir + '/graft-config-init.json')} && "
-                    f"python3 \"$graft_launcher\" cli config validate --repo "
-                    f"{shlex.quote(self.WORKSPACE)} > "
-                    f"{shlex.quote(agent_dir + '/graft-config-validation.json')} && "
                     f"python3 \"$graft_launcher\" cli status --repo "
                     f"{shlex.quote(self.WORKSPACE)} > "
+                    f"{shlex.quote(agent_dir + '/graft-config-status.json')} && "
+                    f"grep -q '\"config_source\": \"graft-original-default\"' "
                     f"{shlex.quote(agent_dir + '/graft-config-status.json')}"
                 ),
             )

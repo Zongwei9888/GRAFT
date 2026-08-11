@@ -178,6 +178,16 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertEqual(retry["agents"], graft["agents"])
         self.assertNotEqual(retry["job_name"], graft["job_name"])
 
+        retry2_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "risk-scorer-replay-graft-grounded-r10-retry2.json"
+        )
+        retry2 = json.loads(retry2_path.read_text(encoding="utf-8"))
+        self.assertEqual(retry2["datasets"], graft["datasets"])
+        self.assertEqual(retry2["agents"], graft["agents"])
+        self.assertNotIn(retry2["job_name"], {graft["job_name"], retry["job_name"]})
+
     def test_original_method_adapter_is_source_pinned_and_profile_free(self) -> None:
         source = (
             EXPERIMENT_ROOT / "graft_original_codex_agent.py"
@@ -188,6 +198,8 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertIn("test ! -d", source)
         self.assertIn("/profiles", source)
         self.assertIn("safe.directory", source)
+        self.assertIn("graft-original-default", source)
+        self.assertNotIn("cli init --repo", source)
         self.assertNotIn("terminal-bench/html-js-filter", source)
         self.assertNotIn("test_outputs.py", source)
 
