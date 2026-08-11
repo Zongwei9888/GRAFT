@@ -1,92 +1,181 @@
 from __future__ import annotations
 
-import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from graft.controller import GraftController
+from graft.project_config import initialize_project
+from graft.registry import load_config
 from graft.schema import (
+    Behavior,
     DecisionKind,
-    Selection,
-    SourceSnapshot,
+    EvidenceItem,
+    FailureMode,
+    FeedbackGraph,
     Verdict,
     VerifierResult,
+    VerifierSpec,
 )
 
 
-class ControllerTests(unittest.TestCase):
-    def _write_config(self, root: Path, exit_code: int) -> Path:
-        config_path = root / ".graft" / "config.json"
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config = {
-            "version": 1,
-            "enabled": True,
-            "budget": 1,
-            "max_set_fpr": 0,
-            "checkpoint_mode": "strict",
-            "max_feedback_rounds": 2,
-            "failure_policy": "open",
-            "verifiers": [
-                {
-                    "id": "fixture",
-                    "kind": "command",
-                    "cost": 1,
-                    "blocking": True,
-                    "command": [sys.executable, "-c", f"raise SystemExit({exit_code})"],
-                }
-            ],
-            "calibration": {
-                "failure_scenarios": [
-                    {"id": "failure", "detections": {"fixture": 1}}
-                ],
-                "clean_scenarios": [
-                    {"id": "clean", "false_alarms": {"fixture": 0}}
-                ],
-            },
-        }
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-        return config_path
+def feedback_graph(
+    source_hash: str, *, uncertainties: tuple[str, ...] = ()
+) -> FeedbackGraph:
+    spec = VerifierSpec(
+        verifier_id="dynamic-review",
+        kind="codex_review",
+        cost=1,
+        blocking=True,
+        failure_modes=("f1",),
+        objective="check the modeled behavior",
+        prompt="seek an observable counterexample",
+        estimated_detection={"f1": 0.9},
+    )
+    return FeedbackGraph(
+        source_hash=source_hash,
+        behaviors=(Behavior("b1", "the requested value is correct", (), ("value",), 1, 1, 0),),
+        failure_modes=(
+            FailureMode("f1", "b1", "the value violates the request", "semantic", (), (), 1),
+        ),
+        verifiers=(spec,),
+        shared_blind_spots=(),
+        uncertainties=uncertainties,
+    )
 
-    def test_reproducible_failure_blocks_and_writes_report(self) -> None:
+
+class GraphBuilder:
+    def __init__(self, *, uncertainties: tuple[str, ...] = ()) -> None:
+        self.uncertainties = uncertainties
+
+    def build(self, snapshot, requirements, config, *, config_path):
+        self.requirements = requirements
+        return feedback_graph(
+            snapshot.checkpoint_key, uncertainties=self.uncertainties
+        )
+
+
+class Executor:
+    def __init__(
+        self,
+        verdict: Verdict,
+        *,
+        reproducible: bool = False,
+        source_hash: str | None = None,
+    ) -> None:
+        self.verdict = verdict
+        self.reproducible = reproducible
+        self.source_hash = source_hash
+
+    def run(self, spec, snapshot, **kwargs):
+        evidence = (
+            EvidenceItem("command", "observed mismatch", command=("check-value",)),
+        ) if self.verdict == Verdict.FAIL else ()
+        return VerifierResult(
+            verifier_id=spec.verifier_id,
+            verdict=self.verdict,
+            summary="observed mismatch" if self.verdict == Verdict.FAIL else "no mismatch",
+            source_hash=self.source_hash or snapshot.checkpoint_key,
+            blocking=True,
+            reproducible=self.reproducible,
+            duration_s=0.01,
+            failure_modes=("f1",) if self.verdict == Verdict.FAIL else (),
+            evidence=evidence,
+        )
+
+
+class ControllerTests(unittest.TestCase):
+    def _controller(
+        self,
+        root: Path,
+        verdict: Verdict,
+        *,
+        reproducible: bool = False,
+        uncertainties: tuple[str, ...] = (),
+        result_source_hash: str | None = None,
+    ):
+        path = initialize_project(root).path
+        builder = GraphBuilder(uncertainties=uncertainties)
+        controller = GraftController(
+            load_config(path),
+            config_path=path,
+            graph_builder=builder,
+            executor=Executor(
+                verdict,
+                reproducible=reproducible,
+                source_hash=result_source_hash,
+            ),
+        )
+        return controller, builder
+
+    def test_reproducible_failure_blocks_and_writes_behavior_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
-            path = self._write_config(root, exit_code=1)
-            decision = GraftController.from_path(path).verify(
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, builder = self._controller(root, Verdict.FAIL, reproducible=True)
+            decision = controller.verify(
                 root, requirements=("value must be correct",), session_id="test"
             )
             self.assertEqual(decision.kind, DecisionKind.CONTINUE_WITH_EVIDENCE)
+            self.assertEqual(builder.requirements, ("value must be correct",))
             self.assertTrue(Path(decision.report_path or "").exists())
+            self.assertIn("Violated behavior", decision.reason)
             self.assertIn("Reproduce", decision.reason)
 
-    def test_passing_verifier_allows(self) -> None:
+    def test_passing_dynamic_verifier_allows_when_residual_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
-            path = self._write_config(root, exit_code=0)
-            decision = GraftController.from_path(path).verify(root)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, _ = self._controller(root, Verdict.PASS)
+            decision = controller.verify(root, requirements=("keep value correct",))
             self.assertEqual(decision.kind, DecisionKind.ALLOW)
+            self.assertIsNotNone(decision.graph)
 
     def test_abstention_is_unresolved_not_allowed(self) -> None:
-        controller = object.__new__(GraftController)
-        source = SourceSnapshot(
-            "/tmp", "tree", "requirements", "config", "checkpoint", (), "now"
-        )
-        selection = Selection(("review",), 0.5, 0.0, 1.0, True, 2)
-        result = VerifierResult(
-            verifier_id="review",
-            verdict=Verdict.ABSTAIN,
-            summary="Insufficient evidence.",
-            source_hash="checkpoint",
-            blocking=False,
-            reproducible=False,
-            duration_s=0.1,
-        )
-        decision = controller._decide(source, selection, (result,))
-        self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
-        self.assertIn("abstained", decision.reason)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, _ = self._controller(root, Verdict.ABSTAIN)
+            decision = controller.verify(root, requirements=("keep value correct",))
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIn("abstained", decision.reason)
+
+    def test_missing_raw_requirements_never_falls_back_to_hardcoded_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, _ = self._controller(root, Verdict.PASS)
+            decision = controller.verify(root)
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIn("raw user requirements", decision.reason)
+
+    def test_missing_shared_lineage_model_is_not_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, _ = self._controller(
+                root,
+                Verdict.PASS,
+                uncertainties=(
+                    "lineage_uncertainty: shared sources lack a blind-spot scenario",
+                ),
+            )
+            decision = controller.verify(root, requirements=("keep value correct",))
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIn("lineage_uncertainty", decision.reason)
+
+    def test_stale_verifier_result_is_not_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            controller, _ = self._controller(
+                root,
+                Verdict.PASS,
+                result_source_hash="different-checkpoint",
+            )
+            decision = controller.verify(root, requirements=("keep value correct",))
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIn("different checkpoint", decision.reason)
 
 
 if __name__ == "__main__":

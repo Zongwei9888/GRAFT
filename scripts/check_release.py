@@ -26,10 +26,10 @@ def main() -> int:
     versions = {
         "package": package_version,
         "runtime": __version__,
-        "plugin": manifest.get("version"),
+        "plugin": str(manifest.get("version", "")).split("+", 1)[0],
     }
     if len(set(versions.values())) != 1:
-        errors.append(f"Version mismatch: {versions}")
+        errors.append(f"Base version mismatch: {versions}")
 
     root_schema = PROJECT_ROOT / "schemas/graft_config.schema.json"
     packaged_schema = PROJECT_ROOT / "src/graft/resources/graft_config.schema.json"

@@ -13,6 +13,7 @@ htmlcov/
 build/
 dist/
 artifacts/
+experiments/terminal_bench/jobs/
 .graft/reports/
 .graft/state/
 .graft/telemetry/

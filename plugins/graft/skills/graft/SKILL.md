@@ -1,17 +1,17 @@
 ---
 name: graft-verification
-description: Inspect, configure, or explain the GRAFT verification governor for Codex. Use when the user asks about GRAFT status, verifier configuration, checkpoint evidence, reports, enablement, or project initialization. GRAFT lifecycle hooks run automatically and do not require this skill for ordinary coding tasks.
+description: Inspect, configure, enable, disable, or explain the GRAFT Original verification governor for Codex. Use when the user asks about GRAFT status, dynamic verifier construction, checkpoint evidence, reports, or project policy. Lifecycle hooks run automatically during ordinary coding tasks.
 ---
 
-# GRAFT Verification Governor
+# GRAFT Original Verification Governor
 
-GRAFT is an external evidence gate. It does not plan or repair code for Codex. Its lifecycle hooks
-record the task and tool facts, then verify changed source state when Codex is ready to stop.
+GRAFT is an external evidence gate, not Codex's planner. On a changed Stop checkpoint, isolated
+structured model calls derive task-specific Behaviors, Failure Modes, verifier objectives, and
+shared blind spots from raw multi-turn requirements and observable workspace state. Do not describe
+GRAFT as a fixed test checklist or infer verifier behavior from a language/framework name.
 
-## Commands
-
-Resolve the plugin root as the directory two levels above this `SKILL.md`. Run the bundled launcher
-with an absolute path so the command works from any repository:
+Resolve the plugin root as the directory two levels above this `SKILL.md`, then use the portable
+launcher:
 
 ```bash
 python3 <plugin-root>/scripts/graft_plugin.py cli status --repo .
@@ -20,35 +20,31 @@ python3 <plugin-root>/scripts/graft_plugin.py cli config validate --repo .
 python3 <plugin-root>/scripts/graft_plugin.py cli verify --repo . --requirement "..."
 ```
 
-Only run the following command when the user asks to configure or enable project-specific checks,
-because it creates `.graft/config.json`:
+Normal use in an arbitrary directory needs no initialization. Only run `cli init` when the user
+asks for a versioned project override of budgets, models, policies, or general verifier templates:
 
 ```bash
 python3 <plugin-root>/scripts/graft_plugin.py cli init --repo .
 ```
 
-Only trust a repository configuration after showing the user its path, verifier commands, and
-validation result. Trust is bound to the configuration hash and is automatically revoked on edits:
+Show the generated path and validation result before trusting a repository override:
 
 ```bash
 python3 <plugin-root>/scripts/graft_plugin.py cli config trust --repo .
 python3 <plugin-root>/scripts/graft_plugin.py cli config untrust --repo .
 ```
 
-For a project-only switch, use `cli config enable` or `cli config disable`. These do not install or
-remove the global plugin.
+`cli config enable` and `cli config disable` are project-only switches.
 
-## Interpretation
+Interpretation:
 
-- `project`: use the repository's reviewed and hash-trusted `.graft/config.json`.
-- `profile:*`: use a matching user profile.
-- `safe-git`: run only the conservative `git diff --check` fallback.
-- `observe`: collect session facts but do not enforce verification.
-- an untrusted or changed project config never executes commands; Git workspaces use `safe-git`.
-- `allow`: selected verifiers passed; this is evidence, not proof of correctness.
-- `continue_with_evidence`: a reproducible blocking failure should be returned to the same Codex
-  task for autonomous repair.
-- `unresolved`: never reinterpret an error, abstention, or model-only suspicion as a pass.
+- `graft-original-default`: domain-neutral runtime modeling and dynamic verifier retrieval;
+- `project`: reviewed v2 project policy bound to an exact hash;
+- `profile:*`: a matching reviewed user policy;
+- `allow`: selected task-specific evidence passed within the residual-risk threshold;
+- `continue_with_evidence`: a reproducible blocking failure returns to the producer Codex session;
+- `unresolved`: evidence is incomplete, errored, abstained, model-only, or lacks capability.
 
-Do not describe generated calibration fixtures as paper results. Research claims require held-out
-calibration and hidden evaluation labels that are unavailable to the online selector.
+Never turn `unresolved` into a pass. Never call model identities independent merely because they
+run in fresh threads. Research claims require held-out calibration and evaluation labels that are
+unavailable to the online selector.

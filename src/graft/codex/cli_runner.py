@@ -93,6 +93,8 @@ class CliCodexRunner:
             args.extend(("--ignore-user-config", "--ignore-rules"))
         if config.disable_hooks:
             args.extend(("--disable", "hooks"))
+        if config.skip_git_repo_check:
+            args.append("--skip-git-repo-check")
         if config.output_schema:
             args.extend(("--output-schema", str(config.output_schema.resolve())))
         return args

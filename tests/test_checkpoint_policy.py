@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from graft.codex.checkpoint_policy import DefaultCheckpointPolicy
-from graft.codex.session_state import SessionState
+from graft.codex.session_state import PromptRecord, SessionState, prompt_hash
 from graft.schema import SourceSnapshot
 
 
@@ -21,50 +21,45 @@ class CheckpointPolicyTests(unittest.TestCase):
             self.state,
             snapshot("old"),
             mode="completion",
-            last_assistant_message="Implemented the change.",
+            last_assistant_message="any producer message",
             stop_hook_active=False,
         )
-        self.assertEqual(action.kind, "no_op")
+        self.assertEqual(action.reason, "no_workspace_change")
 
-    def test_completion_with_change_verifies(self) -> None:
+    def test_changed_stop_boundary_verifies_without_language_markers(self) -> None:
         action = self.policy.evaluate(
             self.state,
             snapshot("new"),
             mode="completion",
-            last_assistant_message="Implemented the change and tests pass.",
+            last_assistant_message="这段自然语言不需要匹配任何完成关键词",
+            stop_hook_active=False,
+        )
+        self.assertEqual(action.kind, "verify")
+        self.assertEqual(action.reason, "workspace_changed_at_stop_boundary")
+
+    def test_producer_question_does_not_classify_task_semantics(self) -> None:
+        action = self.policy.evaluate(
+            self.state,
+            snapshot("new"),
+            mode="completion",
+            last_assistant_message="Should this be considered complete?",
             stop_hook_active=False,
         )
         self.assertEqual(action.kind, "verify")
 
-    def test_waiting_for_user_is_noop(self) -> None:
+    def test_explicit_mode_uses_only_a_protocol_token(self) -> None:
+        requirement = "Do work [graft:verify]"
+        self.state.prompts.append(
+            PromptRecord(requirement, prompt_hash(requirement), "user")
+        )
         action = self.policy.evaluate(
             self.state,
             snapshot("new"),
-            mode="completion",
-            last_assistant_message="Please confirm the intended behavior?",
+            mode="explicit",
+            last_assistant_message=None,
             stop_hook_active=False,
         )
-        self.assertEqual(action.kind, "no_op")
-
-    def test_waiting_for_user_wins_even_without_a_workspace_change(self) -> None:
-        action = self.policy.evaluate(
-            self.state,
-            snapshot("old"),
-            mode="completion",
-            last_assistant_message="I need clarification: which behavior should change?",
-            stop_hook_active=False,
-        )
-        self.assertEqual(action.reason, "assistant_awaiting_user")
-
-    def test_completed_read_only_turn_becomes_an_epoch_boundary(self) -> None:
-        action = self.policy.evaluate(
-            self.state,
-            snapshot("old"),
-            mode="completion",
-            last_assistant_message="The repository review is completed.",
-            stop_hook_active=False,
-        )
-        self.assertEqual(action.reason, "read_only_completion")
+        self.assertEqual(action.reason, "explicit_checkpoint")
 
     def test_unchanged_continuation_does_not_loop(self) -> None:
         self.state.last_blocked_tree_hash = "new"

@@ -4,31 +4,28 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from graft.registry import GraftConfig, load_config
+from graft.registry import GraftConfig, default_original_config_payload, load_config
 from graft.runtime_paths import config_home, workspace_identifier
 
 
 @dataclass(frozen=True)
 class ResolvedConfig:
     workspace: Path
-    path: Path | None
+    path: Path
     source: str
     reason: str
 
     @property
     def configured(self) -> bool:
-        return self.path is not None
+        return True
 
     def load(self) -> GraftConfig:
-        if self.path is None:
-            raise ValueError(f"Workspace is observe-only: {self.reason}")
         return load_config(self.path)
 
 
@@ -42,6 +39,8 @@ class ProjectConfigTrust:
 
 
 def resolve_config(workspace: Path) -> ResolvedConfig:
+    """Resolve GRAFT without inferring a language, framework, or task class."""
+
     root = workspace.expanduser().resolve()
     project = root / ".graft" / "config.json"
     if project.is_file():
@@ -64,6 +63,10 @@ def resolve_config(workspace: Path) -> ResolvedConfig:
             if not isinstance(config, Mapping):
                 continue
             materialized = _materialize_profile(profile_path, config)
+            try:
+                load_config(materialized)
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
             return ResolvedConfig(
                 root,
                 materialized,
@@ -71,30 +74,11 @@ def resolve_config(workspace: Path) -> ResolvedConfig:
                 f"matched user profile {profile_path.name}",
             )
 
-    if _is_git_workspace(root):
-        safe = _safe_git_config()
-        project_reason = (
-            "; project config is untrusted or changed—run `graft config trust` after review"
-            if project.is_file()
-            else ""
-        )
-        return ResolvedConfig(
-            root,
-            safe,
-            "safe-git",
-            "no trusted project/profile configuration; using git diff --check only"
-            + project_reason,
-        )
-    return ResolvedConfig(
-        root,
-        None,
-        "observe",
-        (
-            "project config is untrusted or changed and workspace is not a Git repository"
-            if project.is_file()
-            else "no project configuration and workspace is not a Git repository"
-        ),
-    )
+    default = _default_original_config()
+    reason = "using the domain-neutral GRAFT Original dynamic registry"
+    if project.is_file():
+        reason += "; the project config is untrusted or changed"
+    return ResolvedConfig(root, default, "graft-original-default", reason)
 
 
 def project_config_trust(workspace: Path) -> ProjectConfigTrust:
@@ -135,8 +119,7 @@ def trust_project_config(workspace: Path) -> ProjectConfigTrust:
 def untrust_project_config(workspace: Path) -> ProjectConfigTrust:
     root = workspace.expanduser().resolve()
     document = _read_trust_document()
-    workspaces = document.setdefault("workspaces", {})
-    workspaces.pop(workspace_identifier(root), None)
+    document.setdefault("workspaces", {}).pop(workspace_identifier(root), None)
     _write_trust_document(document)
     return project_config_trust(root)
 
@@ -162,9 +145,7 @@ def _read_trust_document() -> dict[str, Any]:
 
 
 def _write_trust_document(document: dict[str, Any]) -> None:
-    path = _trust_path()
-    payload = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
-    _atomic_write(path, payload)
+    _atomic_write(_trust_path(), json.dumps(document, ensure_ascii=False, indent=2) + "\n")
 
 
 def _file_hash(path: Path) -> str:
@@ -175,16 +156,28 @@ def _profile_matches(workspace: Path, raw: Mapping[str, Any]) -> bool:
     match = raw.get("match", {})
     if not isinstance(match, Mapping):
         return False
-    all_files = tuple(str(item) for item in match.get("files_all", []))
-    any_files = tuple(str(item) for item in match.get("files_any", []))
+    raw_all = match.get("files_all", [])
+    raw_any = match.get("files_any", [])
+    if not isinstance(raw_all, list) or not all(
+        isinstance(item, str) for item in raw_all
+    ):
+        return False
+    if not isinstance(raw_any, list) or not all(
+        isinstance(item, str) for item in raw_any
+    ):
+        return False
+    all_files = tuple(raw_all)
+    any_files = tuple(raw_any)
     path_regex = match.get("path_regex")
     if all_files and not all((workspace / item).exists() for item in all_files):
         return False
     if any_files and not any((workspace / item).exists() for item in any_files):
         return False
     if path_regex is not None:
+        if not isinstance(path_regex, str):
+            return False
         try:
-            if re.search(str(path_regex), str(workspace)) is None:
+            if re.search(path_regex, str(workspace)) is None:
                 return False
         except re.error:
             return False
@@ -192,80 +185,21 @@ def _profile_matches(workspace: Path, raw: Mapping[str, Any]) -> bool:
 
 
 def _materialize_profile(profile_path: Path, config: Mapping[str, Any]) -> Path:
-    target_dir = config_home() / "materialized"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{profile_path.stem}.json"
+    target = config_home() / "materialized" / f"{profile_path.stem}.json"
     payload = json.dumps(config, ensure_ascii=False, indent=2) + "\n"
     if not target.exists() or target.read_text(encoding="utf-8") != payload:
         _atomic_write(target, payload)
     return target
 
 
-def _safe_git_config() -> Path:
-    target = config_home() / "generated" / "safe-git-v1.json"
-    payload = {
-        "version": 1,
-        "enabled": True,
-        "budget": 0.25,
-        "max_set_fpr": 0.0,
-        "checkpoint_mode": "completion",
-        "max_feedback_rounds": 2,
-        "failure_policy": "open",
-        "environment_fingerprint": "graft-global-safe-git-v1",
-        "verifiers": [
-            {
-                "id": "git-diff-check",
-                "kind": "command",
-                "cost": 0.25,
-                "blocking": True,
-                "failure_modes": ["patch_whitespace_or_conflict_marker"],
-                "timeout_s": 30,
-                "command": ["git", "diff", "--check"],
-                "failure_exit_codes": [1, 2],
-                "lineage": {
-                    "provider": "git",
-                    "modality": ["source-diff"],
-                    "oracle": "git-diff-check",
-                },
-            }
-        ],
-        "calibration": {
-            "failure_scenarios": [
-                {
-                    "id": "git-diff-detectable-failure",
-                    "weight": 1.0,
-                    "detections": {"git-diff-check": 1.0},
-                }
-            ],
-            "clean_scenarios": [
-                {
-                    "id": "git-clean-diff",
-                    "weight": 1.0,
-                    "false_alarms": {"git-diff-check": 0.0},
-                }
-            ],
-        },
-    }
-    encoded = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    if not target.exists() or target.read_text(encoding="utf-8") != encoded:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write(target, encoded)
+def _default_original_config() -> Path:
+    target = config_home() / "generated" / "graft-original-v2.json"
+    payload = json.dumps(
+        default_original_config_payload(), ensure_ascii=False, indent=2
+    ) + "\n"
+    if not target.exists() or target.read_text(encoding="utf-8") != payload:
+        _atomic_write(target, payload)
     return target
-
-
-def _is_git_workspace(workspace: Path) -> bool:
-    try:
-        completed = subprocess.run(
-            ["git", "-C", str(workspace), "rev-parse", "--is-inside-work-tree"],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return completed.returncode == 0 and completed.stdout.strip() == "true"
 
 
 def _atomic_write(path: Path, content: str) -> None:

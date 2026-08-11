@@ -1,34 +1,53 @@
 # Architecture
 
-GRAFT is an external verification governor, not a replacement planner.
+GRAFT is a feedback controller around a free Codex producer, not a replacement planner.
 
 ```text
-Codex session
-  ├─ UserPromptSubmit → ordered task requirements
-  ├─ PostToolUse      → hashed execution facts
-  └─ Stop             → frozen source checkpoint
+producer session
+  ├─ UserPromptSubmit → raw multi-turn requirements
+  ├─ PostToolUse      → hashed tool facts
+  └─ Stop             → immutable checkpoint
                               ↓
-                    budget/FPR-constrained selector
+                 structured Behavior/Failure modeler
                               ↓
-                    isolated verifier execution
+                structured verifier-registry planner
+                              ↓
+          Behavior–Failure–Verifier–Lineage hypergraph
+                              ↓
+              budgeted high-order-aware retrieval
+                              ↓
+                     isolated verifier execution
                          ┌────┴────┐
                     allow stop   reproducible failure
                                       ↓
-                              same Codex session continues
+                            same producer continues
 ```
 
-The plugin bundles the same Python core used by the package. `scripts/sync_plugin_runtime.py`
-copies the source into the plugin, and CI rejects drift. Session state and reports live outside the
-target repository. Event claims deduplicate plugin, user-level, and project hook installations.
+For failure mode `z` and selected set `S`, the implementation evaluates a mixture of the ordinary
+case and explicit shared-blind-spot scenarios:
+
+```text
+P(miss z | S) = Σ_h w_h Π_{f∈S}(1 - p(f detects z | h))
+utility(S)    = Σ_z risk(z) · (1 - P(miss z | S))
+```
+
+A blind-spot hyperedge can jointly weaken more than two verifiers. This is why multiple fresh Codex
+threads are not automatically treated as independent. The selector performs cost-aware greedy
+retrieval and compares it with the best feasible singleton.
+
+The fixed layer contains only method protocols: typed schemas, state hashes, budget/stop policy,
+sandboxing, generic capability templates, and lineage fields. Behaviors, Failure Modes, verifier
+objectives, prompts, detection estimates, and shared-blind-spot instances are generated for the
+current task.
 
 Security boundaries:
 
-- project verifier commands require a trusted configuration hash;
-- Codex reviewers run in a fresh ephemeral read-only thread with hooks disabled;
-- model-only findings are non-blocking unless independently reproduced;
-- working directories cannot escape the workspace;
-- verifier infrastructure failures are unresolved rather than reinterpreted as passes.
+- project overrides require an exact trusted config hash;
+- model stages run in fresh ephemeral threads with hooks/user config/rules isolated;
+- writable verifier agents use disposable copies;
+- model-only suspicions remain unresolved without an observed reproducer;
+- verifier execution must leave the producer checkpoint unchanged;
+- evidence produced for one source hash cannot gate another.
 
-The current exact selector enumerates candidate subsets and is intentionally capped at 24
-candidates. The operational calibration bundled with generated configs exists to exercise the
-product; academic evaluation must replace it with held-out data.
+The plugin embeds the same core as the Python package. `scripts/sync_plugin_runtime.py` replaces the
+embedded tree atomically, and tests reject drift. Runtime state lives outside target repositories.

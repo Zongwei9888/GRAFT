@@ -4,37 +4,46 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from importlib.resources import files
 from pathlib import Path
 
 from graft.evidence.snapshot import freeze_source
+from graft.modeling import (
+    CodexFeedbackGraphBuilder,
+    FeedbackGraphBuildError,
+    FeedbackGraphBuilder,
+)
 from graft.registry import GraftConfig, load_config
 from graft.schema import (
     Decision,
     DecisionKind,
+    FeedbackGraph,
     Selection,
     SourceSnapshot,
     Verdict,
     VerifierResult,
     to_jsonable,
 )
-from graft.selection import ExactEmpiricalSelector
+from graft.selection import InvalidFeedbackGraph, OriginalHypergraphSelector
 from graft.verifiers import VerifierExecutor
 
 
 class GraftController:
+    """Run the frozen GRAFT Original method at one observable checkpoint."""
+
     def __init__(
         self,
         config: GraftConfig,
         *,
         config_path: Path,
-        selector: ExactEmpiricalSelector | None = None,
+        graph_builder: FeedbackGraphBuilder | None = None,
+        selector: OriginalHypergraphSelector | None = None,
         executor: VerifierExecutor | None = None,
         report_root: Path | None = None,
     ) -> None:
         self.config = config
         self.config_path = config_path.resolve()
-        self.selector = selector or ExactEmpiricalSelector()
+        self.graph_builder = graph_builder or CodexFeedbackGraphBuilder()
+        self.selector = selector or OriginalHypergraphSelector()
         self.executor = executor or VerifierExecutor()
         self.report_root = report_root.resolve() if report_root else None
 
@@ -68,106 +77,210 @@ class GraftController:
     ) -> Decision:
         source = snapshot or self.snapshot(repo, requirements)
         if not self.config.enabled:
-            return Decision(DecisionKind.ALLOW, "GRAFT is disabled.", source)
-        if not self.config.verifiers:
             return self._finish(
                 Decision(
-                    DecisionKind.UNRESOLVED,
-                    "No verifiers are configured.",
-                    source,
+                    kind=DecisionKind.ALLOW,
+                    reason="GRAFT is disabled.",
+                    snapshot=source,
                 ),
                 session_id,
             )
-        if not self.config.calibration.failure_scenarios:
+        if not requirements:
             return self._finish(
                 Decision(
-                    DecisionKind.UNRESOLVED,
-                    "No failure calibration scenarios are configured; selection would be ungrounded.",
-                    source,
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=(
+                        "No raw user requirements were captured. GRAFT Original does not "
+                        "invent a task specification or use the producer's summary as a substitute."
+                    ),
+                    snapshot=source,
                 ),
                 session_id,
             )
 
-        selection = self.selector.select(
-            list(self.config.verifiers),
-            self.config.calibration,
-            budget=self.config.budget,
-            max_set_fpr=self.config.max_set_fpr,
-        )
+        try:
+            graph = self.graph_builder.build(
+                source,
+                requirements,
+                self.config,
+                config_path=self.config_path,
+            )
+        except (FeedbackGraphBuildError, ValueError) as exc:
+            return self._finish(
+                Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=f"Could not construct the dynamic feedback graph: {exc}",
+                    snapshot=source,
+                ),
+                session_id,
+            )
+        if graph.source_hash != source.checkpoint_key:
+            return self._finish(
+                Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason="The feedback graph is bound to a different source checkpoint.",
+                    snapshot=source,
+                    graph=graph,
+                ),
+                session_id,
+            )
+
+        try:
+            selection = self.selector.select(
+                graph,
+                budget=self.config.budget,
+                policy=self.config.selection,
+            )
+        except InvalidFeedbackGraph as exc:
+            return self._finish(
+                Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=f"The dynamically constructed feedback graph is invalid: {exc}",
+                    snapshot=source,
+                    graph=graph,
+                ),
+                session_id,
+            )
         if not selection.verifier_ids:
             return self._finish(
                 Decision(
-                    DecisionKind.UNRESOLVED,
-                    "No non-empty verifier subset satisfies the configured constraints.",
-                    source,
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=(
+                        "The task-specific registry contains no verifier with positive expected "
+                        "value inside the evidence budget."
+                    ),
+                    snapshot=source,
+                    graph=graph,
                     selection=selection,
                 ),
                 session_id,
             )
 
-        by_id = {item.verifier_id: item for item in self.config.verifiers}
-        schema_path = self._verdict_schema(Path(repo))
+        by_id = {item.verifier_id: item for item in graph.verifiers}
 
         def run_one(verifier_id: str) -> VerifierResult:
             return self.executor.run(
                 by_id[verifier_id],
                 source,
                 requirements=requirements,
+                graph=graph,
                 config_path=self.config_path,
-                verdict_schema=schema_path,
+                environment_fingerprint=self.config.environment_fingerprint,
             )
 
         with ThreadPoolExecutor(max_workers=min(4, len(selection.verifier_ids))) as pool:
             results = tuple(pool.map(run_one, selection.verifier_ids))
 
-        decision = self._decide(source, selection, results)
+        stale_results = tuple(
+            result
+            for result in results
+            if result.source_hash != source.checkpoint_key
+        )
+        if stale_results:
+            return self._finish(
+                Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=(
+                        "Verifier evidence is bound to a different checkpoint: "
+                        + ", ".join(item.verifier_id for item in stale_results)
+                    ),
+                    snapshot=source,
+                    graph=graph,
+                    selection=selection,
+                    results=results,
+                ),
+                session_id,
+            )
+
+        current = self.snapshot(Path(source.root), requirements)
+        if current.checkpoint_key != source.checkpoint_key:
+            return self._finish(
+                Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=(
+                        "The producer workspace changed while verification was running; evidence "
+                        "is bound to the previous checkpoint and cannot gate the new state."
+                    ),
+                    snapshot=source,
+                    graph=graph,
+                    selection=selection,
+                    results=results,
+                ),
+                session_id,
+            )
+
+        decision = self._decide(source, graph, selection, results)
         return self._finish(decision, session_id)
 
     def _decide(
         self,
         source: SourceSnapshot,
+        graph: FeedbackGraph,
         selection: Selection,
         results: tuple[VerifierResult, ...],
     ) -> Decision:
-        blocking = [
+        blocking = tuple(
             result
             for result in results
             if result.verdict == Verdict.FAIL
             and result.blocking
             and result.reproducible
-        ]
+        )
         if blocking:
+            behaviors = {item.behavior_id: item for item in graph.behaviors}
+            failures = {item.failure_mode_id: item for item in graph.failure_modes}
             lines = [
                 "[GRAFT Verification Failure]",
                 f"Checkpoint: {source.checkpoint_key}",
                 "Reproducible blocking evidence:",
             ]
             for result in blocking:
-                command = " ".join(result.command) if result.command else "see report"
-                lines.append(f"- {result.verifier_id}: {result.summary}")
-                lines.append(f"  Reproduce: {command}")
+                lines.append(f"- Verifier {result.verifier_id}: {result.summary}")
+                for failure_id in result.failure_modes:
+                    failure = failures.get(failure_id)
+                    if failure is None:
+                        continue
+                    behavior = behaviors.get(failure.behavior_id)
+                    if behavior is not None:
+                        lines.append(f"  Violated behavior: {behavior.description}")
+                    lines.append(f"  Failure mode: {failure.description}")
+                reproductions = [
+                    " ".join(item.command)
+                    for item in result.evidence
+                    if item.command
+                ]
+                if result.command:
+                    reproductions.append(" ".join(result.command))
+                if reproductions:
+                    lines.append(f"  Reproduce: {reproductions[0]}")
             lines.append(
                 "Inspect and resolve the evidenced behavior. Choose the repair strategy yourself."
             )
             return Decision(
-                DecisionKind.CONTINUE_WITH_EVIDENCE,
-                "\n".join(lines),
-                source,
-                selection,
-                results,
+                kind=DecisionKind.CONTINUE_WITH_EVIDENCE,
+                reason="\n".join(lines),
+                snapshot=source,
+                graph=graph,
+                selection=selection,
+                results=results,
             )
 
-        errors = [result for result in results if result.verdict == Verdict.ERROR]
-        suspicions = [
+        errors = tuple(result for result in results if result.verdict == Verdict.ERROR)
+        suspicions = tuple(
             result
             for result in results
             if result.verdict == Verdict.FAIL and result not in blocking
-        ]
-        abstentions = [
+        )
+        abstentions = tuple(
             result for result in results if result.verdict == Verdict.ABSTAIN
-        ]
-        if errors or suspicions or abstentions:
-            detail = []
+        )
+        blocking_uncertainties = tuple(
+            item
+            for item in graph.uncertainties
+            if item.startswith(("coverage_gap:", "lineage_uncertainty:"))
+        )
+        if errors or suspicions or abstentions or blocking_uncertainties:
+            detail: list[str] = []
             detail.extend(f"{item.verifier_id}: {item.summary}" for item in errors)
             detail.extend(
                 f"{item.verifier_id}: unconfirmed finding: {item.summary}"
@@ -177,21 +290,42 @@ class GraftController:
                 f"{item.verifier_id}: abstained: {item.summary}"
                 for item in abstentions
             )
+            detail.extend(blocking_uncertainties)
             return Decision(
-                DecisionKind.UNRESOLVED,
-                "Verification did not produce a reproducible blocking failure, but some "
-                "evidence is unresolved. " + "; ".join(detail),
-                source,
-                selection,
-                results,
+                kind=DecisionKind.UNRESOLVED,
+                reason=(
+                    "Verification found no reproducible blocking counterexample, but the "
+                    "evidence remains incomplete. " + "; ".join(detail)
+                ),
+                snapshot=source,
+                graph=graph,
+                selection=selection,
+                results=results,
+            )
+
+        if selection.residual_risk > self.config.selection.residual_risk_threshold:
+            return Decision(
+                kind=DecisionKind.UNRESOLVED,
+                reason=(
+                    f"Residual modeled risk {selection.residual_risk:.3f} exceeds the configured "
+                    f"threshold {self.config.selection.residual_risk_threshold:.3f}."
+                ),
+                snapshot=source,
+                graph=graph,
+                selection=selection,
+                results=results,
             )
 
         return Decision(
-            DecisionKind.ALLOW,
-            "Selected verifiers completed without a reproducible failure. This is evidence, not a proof of correctness.",
-            source,
-            selection,
-            results,
+            kind=DecisionKind.ALLOW,
+            reason=(
+                "The selected task-specific verifiers completed without a reproducible failure "
+                "and modeled residual risk is within threshold. This is evidence, not proof."
+            ),
+            snapshot=source,
+            graph=graph,
+            selection=selection,
+            results=results,
         )
 
     def _finish(self, decision: Decision, session_id: str) -> Decision:
@@ -217,18 +351,3 @@ class GraftController:
             reason = completed.reason + f"\nFull report: {completed.report_path}"
             completed = replace(completed, reason=reason)
         return completed
-
-    def _verdict_schema(self, repo: Path) -> Path:
-        candidates = (
-            self.config_path.parent.parent
-            / "schemas"
-            / "verifier_verdict.schema.json",
-            repo / "schemas" / "verifier_verdict.schema.json",
-        )
-        for candidate in candidates:
-            if candidate.is_file():
-                return candidate
-        packaged = files("graft").joinpath(
-            "resources", "verifier_verdict.schema.json"
-        )
-        return Path(str(packaged))

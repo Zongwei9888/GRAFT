@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "enabled": true,
+  "budget": 1.9,
+  "max_set_fpr": 0.0,
+  "checkpoint_mode": "completion",
+  "max_feedback_rounds": 2,
+  "failure_policy": "open",
+  "environment_fingerprint": "terminal-bench-3-session-window-debug-public-v1",
+  "verifiers": [
+    {
+      "id": "python-compile",
+      "kind": "command",
+      "cost": 0.5,
+      "blocking": true,
+      "failure_modes": [
+        "syntax_or_import_failure"
+      ],
+      "timeout_s": 30,
+      "command": [
+        "python3",
+        "-m",
+        "compileall",
+        "-q",
+        "app"
+      ],
+      "failure_exit_codes": [
+        1
+      ],
+      "lineage": {
+        "provider": "cpython",
+        "modality": [
+          "source"
+        ],
+        "oracle": "python-compiler"
+      }
+    },
+    {
+      "id": "public-session-contract",
+      "kind": "command",
+      "cost": 1.5,
+      "blocking": true,
+      "failure_modes": [
+        "late_merge_inconsistent",
+        "recent_session_reclaimed",
+        "uneven_source_watermark_stall",
+        "syntax_or_import_failure"
+      ],
+      "timeout_s": 60,
+      "command": [
+        "python3",
+        "/opt/graft-public-verifiers/session-window-debug/public_contract.py",
+        "behavior"
+      ],
+      "failure_exit_codes": [
+        1
+      ],
+      "lineage": {
+        "provider": "graft-public-contract",
+        "context_sources": [
+          "task-instruction",
+          "DESIGN.md",
+          "public-initial-source"
+        ],
+        "modality": [
+          "behavioral-probe"
+        ],
+        "oracle": "session-window-invariants",
+        "test_author": "graft-experiment"
+      }
+    },
+    {
+      "id": "readonly-source-integrity",
+      "kind": "command",
+      "cost": 0.4,
+      "blocking": true,
+      "failure_modes": [
+        "forbidden_readonly_file_edit"
+      ],
+      "timeout_s": 30,
+      "command": [
+        "python3",
+        "/opt/graft-public-verifiers/session-window-debug/public_contract.py",
+        "integrity"
+      ],
+      "failure_exit_codes": [
+        1
+      ],
+      "lineage": {
+        "provider": "sha256",
+        "context_sources": [
+          "task-instruction",
+          "public-initial-source"
+        ],
+        "modality": [
+          "source-integrity"
+        ],
+        "oracle": "declared-readonly-file-hashes",
+        "test_author": "graft-experiment"
+      }
+    }
+  ],
+  "calibration": {
+    "failure_scenarios": [
+      {
+        "id": "syntax-import-fixture",
+        "detections": {
+          "python-compile": 1.0,
+          "public-session-contract": 1.0,
+          "readonly-source-integrity": 0.0
+        }
+      },
+      {
+        "id": "late-merge-fixture",
+        "detections": {
+          "python-compile": 0.0,
+          "public-session-contract": 1.0,
+          "readonly-source-integrity": 0.0
+        }
+      },
+      {
+        "id": "retention-fixture",
+        "detections": {
+          "python-compile": 0.0,
+          "public-session-contract": 1.0,
+          "readonly-source-integrity": 0.0
+        }
+      },
+      {
+        "id": "watermark-fixture",
+        "detections": {
+          "python-compile": 0.0,
+          "public-session-contract": 1.0,
+          "readonly-source-integrity": 0.0
+        }
+      },
+      {
+        "id": "readonly-edit-fixture",
+        "detections": {
+          "python-compile": 0.0,
+          "public-session-contract": 0.0,
+          "readonly-source-integrity": 1.0
+        }
+      }
+    ],
+    "clean_scenarios": [
+      {
+        "id": "public-oracle-clean-fixture",
+        "false_alarms": {
+          "python-compile": 0.0,
+          "public-session-contract": 0.0,
+          "readonly-source-integrity": 0.0
+        }
+      }
+    ]
+  },
+  "_note": "Public-contract pilot fixture only. Hidden Terminal-Bench tests and solution are unavailable to GRAFT. Replace fixture calibration with held-out mutation data for paper results."
+}

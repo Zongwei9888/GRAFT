@@ -26,7 +26,6 @@ from graft.project_config import initialize_project, set_project_enabled
 from graft.registry import load_config
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
 from graft.schema import DecisionKind, RunConfig, to_jsonable
-from graft.selection import ExactEmpiricalSelector
 from graft.user_profiles import create_profile, list_profiles
 
 
@@ -82,7 +81,7 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--codex-home", type=Path)
 
     initialize = subparsers.add_parser(
-        "init", help="Discover safe project verifiers and create .graft/config.json"
+        "init", help="Create a domain-neutral GRAFT Original project override"
     )
     initialize.add_argument("--repo", type=Path, default=Path.cwd())
     initialize.add_argument(
@@ -104,7 +103,7 @@ def _parser() -> argparse.ArgumentParser:
     for name, help_text in (
         ("show", "Print the resolved configuration"),
         ("validate", "Validate the resolved or explicitly supplied configuration"),
-        ("enable", "Enable GRAFT for this project, discovering checks if needed"),
+        ("enable", "Enable GRAFT Original for this project"),
         ("disable", "Disable GRAFT for this project without uninstalling the plugin"),
         ("trust", "Trust the current project configuration hash after review"),
         ("untrust", "Revoke trust so project commands cannot run"),
@@ -135,10 +134,19 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "snapshot":
+        workspace = resolve_workspace(args.repo)
+        if args.config is not None:
+            config_path = args.config
+            if not config_path.is_absolute():
+                config_path = workspace / config_path
+        else:
+            config_path = resolve_config(workspace).path
+        config = load_config(config_path)
         snapshot = freeze_source(
-            args.repo,
+            workspace,
             requirements=tuple(args.requirement),
-            config_path=args.config,
+            config_path=config_path,
+            environment_fingerprint=config.environment_fingerprint,
         )
         print(json.dumps(to_jsonable(snapshot), ensure_ascii=False, indent=2))
         return 0
@@ -255,21 +263,21 @@ def main(argv: list[str] | None = None) -> int:
             "config_source": resolution.source,
             "config_path": str(resolution.path) if resolution.path else None,
             "reason": resolution.reason,
-            "verifiers": [],
+            "method": None,
+            "verifier_templates": [],
             "selection": None,
             "project_trust": to_jsonable(project_config_trust(workspace)),
         }
-        if resolution.configured:
-            config = resolution.load()
-            payload["verifiers"] = [item.verifier_id for item in config.verifiers]
-            if config.enabled and config.calibration.failure_scenarios:
-                selection = ExactEmpiricalSelector().select(
-                    list(config.verifiers),
-                    config.calibration,
-                    budget=config.budget,
-                    max_set_fpr=config.max_set_fpr,
-                )
-                payload["selection"] = to_jsonable(selection)
+        config = resolution.load()
+        payload["method"] = config.method
+        payload["enabled"] = config.enabled
+        payload["verifier_templates"] = [
+            item.template_id for item in config.verifier_templates
+        ]
+        payload["selection"] = {
+            "algorithm": config.selection.algorithm,
+            "status": "constructed dynamically at each verification checkpoint",
+        }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 

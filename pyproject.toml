@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-graft"
-version = "0.4.0"
-description = "A budget-aware verification governor for Codex checkpoints."
+version = "0.5.0"
+description = "A dynamic, lineage-aware verification governor for Codex checkpoints."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}

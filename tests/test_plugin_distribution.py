@@ -37,7 +37,7 @@ class PluginDistributionTests(unittest.TestCase):
             )
         )
         self.assertEqual(manifest["name"], "graft")
-        self.assertEqual(manifest["version"], __version__)
+        self.assertEqual(manifest["version"].split("+", 1)[0], __version__)
         self.assertEqual(manifest["skills"], "./skills/")
         self.assertNotIn("hooks", manifest)
 
@@ -96,7 +96,10 @@ class PluginDistributionTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(status.returncode, 0, status.stderr)
-            self.assertEqual(json.loads(status.stdout)["config_source"], "observe")
+            self.assertEqual(
+                json.loads(status.stdout)["config_source"],
+                "graft-original-default",
+            )
 
             event = {
                 "session_id": "plugin-test-session",
@@ -130,6 +133,27 @@ class PluginDistributionTests(unittest.TestCase):
                 [item["text"] for item in state["prompts"] if item["origin"] == "user"],
                 ["Inspect this workspace"],
             )
+
+    def test_bundled_runtime_rejects_malformed_profile_matcher(self) -> None:
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = str(PLUGIN_ROOT / "runtime" / "src")
+        environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        script = (
+            "from pathlib import Path; import graft; "
+            "from graft.configuration import _profile_matches; "
+            "assert 'plugins/graft/runtime/src' in graft.__file__.replace('\\\\', '/'); "
+            "assert _profile_matches(Path('.').resolve(), "
+            "{'match': {'files_all': 7}}) is False"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 if __name__ == "__main__":

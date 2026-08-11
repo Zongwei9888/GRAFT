@@ -30,8 +30,9 @@
         "additionalProperties": false
       }
     },
-    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "reproducible": {"type": "boolean"}
   },
-  "required": ["verdict", "failure_modes", "summary", "evidence", "confidence"],
+  "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible"],
   "additionalProperties": false
 }

@@ -1,23 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "GRAFT configuration v1",
+  "title": "GRAFT Original configuration v2",
   "type": "object",
   "required": [
     "version",
+    "method",
     "enabled",
     "budget",
-    "max_set_fpr",
     "checkpoint_mode",
     "max_feedback_rounds",
     "failure_policy",
-    "verifiers",
-    "calibration"
+    "modeling",
+    "verifier_templates",
+    "selection"
   ],
   "properties": {
-    "version": {"const": 1},
+    "version": {"const": 2},
+    "method": {"const": "graft-original"},
     "enabled": {"type": "boolean"},
     "budget": {"type": "number", "minimum": 0},
-    "max_set_fpr": {"type": "number", "minimum": 0, "maximum": 1},
     "checkpoint_mode": {
       "type": "string",
       "enum": ["completion", "strict", "explicit"]
@@ -25,93 +26,100 @@
     "max_feedback_rounds": {"type": "integer", "minimum": 0},
     "failure_policy": {"type": "string", "enum": ["open", "closed"]},
     "environment_fingerprint": {"type": "string"},
-    "verifiers": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/verifier"}
-    },
-    "calibration": {
+    "modeling": {
       "type": "object",
-      "required": ["failure_scenarios", "clean_scenarios"],
+      "required": ["behavior_modeler", "verifier_planner"],
       "properties": {
-        "failure_scenarios": {
-          "type": "array",
-          "items": {"$ref": "#/$defs/failureScenario"}
-        },
-        "clean_scenarios": {
-          "type": "array",
-          "items": {"$ref": "#/$defs/cleanScenario"}
-        }
+        "behavior_modeler": {"$ref": "#/$defs/modelStage"},
+        "verifier_planner": {"$ref": "#/$defs/modelStage"}
       },
       "additionalProperties": false
-    }
+    },
+    "verifier_templates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/verifierTemplate"}
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "max_verifiers",
+        "min_marginal_gain_per_cost",
+        "residual_risk_threshold"
+      ],
+      "properties": {
+        "algorithm": {"const": "lazy-greedy-hypergraph"},
+        "max_verifiers": {"type": "integer", "minimum": 1},
+        "min_marginal_gain_per_cost": {"type": "number", "minimum": 0},
+        "residual_risk_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "_method_contract": {"type": "string"},
+    "_note": {"type": "string"}
   },
   "$defs": {
+    "modelStage": {
+      "type": "object",
+      "required": ["model", "timeout_s", "prompt_family"],
+      "properties": {
+        "model": {"type": ["string", "null"]},
+        "timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "prompt_family": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
     "lineage": {
       "type": "object",
       "properties": {
         "provider": {"type": "string"},
-        "model": {"type": "string"},
-        "thread_policy": {"type": "string"},
-        "prompt_family": {"type": "string"},
+        "model": {"type": ["string", "null"]},
+        "thread_policy": {"type": ["string", "null"]},
+        "prompt_family": {"type": ["string", "null"]},
         "context_sources": {"type": "array", "items": {"type": "string"}},
         "modality": {"type": "array", "items": {"type": "string"}},
-        "oracle": {"type": "string"},
-        "test_author": {"type": "string"}
+        "oracle": {"type": ["string", "null"]},
+        "test_author": {"type": ["string", "null"]}
       },
       "additionalProperties": true
     },
-    "verifier": {
+    "verifierTemplate": {
       "type": "object",
-      "required": ["id", "kind", "cost"],
+      "required": [
+        "id",
+        "kind",
+        "role",
+        "instructions",
+        "capabilities",
+        "cost",
+        "timeout_s",
+        "sandbox",
+        "isolation",
+        "max_instances",
+        "blocking",
+        "model",
+        "lineage"
+      ],
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "kind": {"type": "string", "enum": ["command", "codex_review"]},
+        "kind": {"type": "string", "enum": ["codex_review", "codex_agent", "command"]},
+        "role": {"type": "string", "minLength": 1},
+        "instructions": {"type": "string", "minLength": 1},
+        "capabilities": {"type": "array", "items": {"type": "string"}},
         "cost": {"type": "number", "minimum": 0},
-        "blocking": {"type": "boolean"},
-        "failure_modes": {"type": "array", "items": {"type": "string"}},
         "timeout_s": {"type": "number", "exclusiveMinimum": 0},
-        "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "sandbox": {"type": "string", "enum": ["read-only", "workspace-write"]},
+        "isolation": {"type": "string", "enum": ["ephemeral", "temporary-copy"]},
+        "max_instances": {"type": "integer", "minimum": 1},
+        "blocking": {"type": "boolean"},
+        "model": {"type": ["string", "null"]},
+        "command": {"type": "array", "items": {"type": "string"}},
         "failure_exit_codes": {"type": "array", "items": {"type": "integer"}},
-        "working_directory": {"type": "string"},
-        "prompt_template": {"type": "string"},
-        "model": {"type": "string"},
-        "sandbox": {"type": "string"},
+        "working_directory": {"type": ["string", "null"]},
         "lineage": {"$ref": "#/$defs/lineage"}
-      },
-      "allOf": [
-        {
-          "if": {"properties": {"kind": {"const": "command"}}},
-          "then": {"required": ["command"]}
-        }
-      ],
-      "additionalProperties": true
-    },
-    "failureScenario": {
-      "type": "object",
-      "required": ["id", "detections"],
-      "properties": {
-        "id": {"type": "string"},
-        "weight": {"type": "number", "minimum": 0},
-        "detections": {
-          "type": "object",
-          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
-        }
-      },
-      "additionalProperties": false
-    },
-    "cleanScenario": {
-      "type": "object",
-      "required": ["id", "false_alarms"],
-      "properties": {
-        "id": {"type": "string"},
-        "weight": {"type": "number", "minimum": 0},
-        "false_alarms": {
-          "type": "object",
-          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
-        }
       },
       "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

@@ -18,7 +18,7 @@ GRAFT itself has no third-party runtime dependencies.
 Pin a release tag for reproducibility:
 
 ```bash
-codex plugin marketplace add Zongwei9888/GRAFT --ref v0.4.0
+codex plugin marketplace add Zongwei9888/GRAFT --ref v0.5.0
 codex plugin add graft@graft
 ```
 
@@ -73,7 +73,8 @@ graft doctor
 graft status
 ```
 
-Plugin-only users can ask Codex: `Show the GRAFT status for this workspace`.
+Plugin-only users can ask Codex: `Show the GRAFT status for this workspace`. No per-project
+initialization is required; the dynamic registry works in arbitrary directories.
 
 ## Uninstall
 

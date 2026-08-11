@@ -2,6 +2,20 @@
 
 All notable changes follow semantic versioning.
 
+## 0.5.0 - 2026-08-10
+
+- freeze the original DOCX method as the authoritative implementation contract;
+- replace language-specific discovery and hand-authored calibration fixtures with structured LLM
+  construction of task-specific Behaviors, Failure Modes, verifier candidates, and shared blind
+  spots;
+- replace exact empirical-fixture enumeration with the original cost-aware hypergraph greedy
+  selector and best-singleton fallback;
+- add isolated semantic, agentic-execution, and disposable-copy test-agent capabilities;
+- bind evidence to source and requirements, require an observed reproducer before model findings can
+  block, and reject stale evidence after workspace mutation;
+- make the dynamic registry work in arbitrary Git and non-Git directories without initialization;
+- retain the fixed Terminal-Bench v1 profile only as a rejected historical negative experiment.
+
 ## 0.4.0 - 2026-08-10
 
 - prepare the repository for public GitHub distribution;

@@ -1,7 +1,7 @@
 {
   "name": "graft",
-  "version": "0.4.0",
-  "description": "A local verification governor that checks Codex checkpoints before a task stops.",
+  "version": "0.5.0+codex.20260810162446",
+  "description": "A dynamic, lineage-aware verification governor for Codex checkpoints.",
   "author": {
     "name": "Zongwei9888"
   },
@@ -15,8 +15,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "GRAFT",
-    "shortDescription": "Verify Codex checkpoints with complementary local evidence",
-    "longDescription": "GRAFT observes Codex turns, freezes changed workspace state at completion checkpoints, selects a verifier subset under a configured budget, and either allows completion or returns reproducible evidence for another repair turn.",
+    "shortDescription": "Dynamically verify Codex checkpoints with complementary evidence",
+    "longDescription": "GRAFT derives task-specific behaviors, failures, and verifier candidates from raw requirements and observable workspace state, models their shared lineage, selects complementary evidence under budget, and either allows completion or returns reproducible evidence to the same Codex session.",
     "developerName": "Zongwei9888",
     "category": "Productivity",
     "capabilities": [
@@ -24,7 +24,7 @@
     ],
     "defaultPrompt": [
       "Show the GRAFT status for this workspace",
-      "Initialize safe GRAFT verifiers for this repository",
+      "Explain how GRAFT dynamically verifies this task",
       "Explain the latest GRAFT verification report"
     ],
     "brandColor": "#4F46E5"

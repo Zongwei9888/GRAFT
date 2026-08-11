@@ -39,9 +39,7 @@ def user_prompt_submit() -> int:
     resolution = resolve_config(workspace)
     session_id = str(event.get("session_id", "unknown"))
     prompt = str(event.get("prompt", ""))
-    tree_hash = "observe-only"
-    if resolution.configured:
-        tree_hash, _ = hash_tree(workspace)
+    tree_hash, _ = hash_tree(workspace)
     store = SessionStateStore(workspace, root=paths.state_dir)
     state = store.load(session_id)
     store.record_prompt(state, prompt, tree_hash)
@@ -87,10 +85,6 @@ def stop() -> int:
         store = SessionStateStore(workspace, root=paths.state_dir)
         state = store.load(session_id)
         resolution = resolve_config(workspace)
-        if not resolution.configured:
-            state.status = "observing"
-            store.save(state)
-            return _emit({"continue": True})
         config = resolution.load()
         controller = GraftController(
             config,
@@ -106,11 +100,7 @@ def stop() -> int:
             stop_hook_active=bool(event.get("stop_hook_active", False)),
         )
         if action.kind == "no_op":
-            if action.reason == "assistant_awaiting_user":
-                state.status = "awaiting_user"
-            elif action.reason == "read_only_completion":
-                state.status = "accepted"
-            elif action.reason == "checkpoint_already_verified":
+            if action.reason == "checkpoint_already_verified":
                 state.status = "accepted"
             elif action.reason == "unchanged_after_graft_feedback":
                 state.status = "unresolved"

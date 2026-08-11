@@ -41,6 +41,81 @@ class Lineage:
     test_author: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    def shared_sources(self, other: "Lineage") -> tuple[str, ...]:
+        shared: list[str] = []
+        for label, left, right in (
+            ("provider", self.provider, other.provider),
+            ("model", self.model, other.model),
+            ("thread_policy", self.thread_policy, other.thread_policy),
+            ("prompt_family", self.prompt_family, other.prompt_family),
+            ("oracle", self.oracle, other.oracle),
+            ("test_author", self.test_author, other.test_author),
+        ):
+            if left is not None and left == right:
+                shared.append(f"{label}:{left}")
+        shared.extend(
+            f"context:{item}"
+            for item in sorted(set(self.context_sources) & set(other.context_sources))
+        )
+        shared.extend(
+            f"modality:{item}"
+            for item in sorted(set(self.modality) & set(other.modality))
+        )
+        return tuple(shared)
+
+
+@dataclass(frozen=True)
+class Behavior:
+    behavior_id: str
+    description: str
+    source_refs: tuple[str, ...]
+    observables: tuple[str, ...]
+    severity: float
+    likelihood: float
+    reach: float
+
+    @property
+    def risk(self) -> float:
+        return self.severity * self.likelihood * (1.0 + self.reach)
+
+
+@dataclass(frozen=True)
+class FailureMode:
+    failure_mode_id: str
+    behavior_id: str
+    description: str
+    category: str
+    observable_signals: tuple[str, ...]
+    required_capabilities: tuple[str, ...]
+    risk: float
+
+
+@dataclass(frozen=True)
+class TaskAnalysis:
+    behaviors: tuple[Behavior, ...]
+    failure_modes: tuple[FailureMode, ...]
+    uncertainties: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VerifierTemplate:
+    template_id: str
+    kind: str
+    role: str
+    instructions: str
+    capabilities: tuple[str, ...]
+    cost: float
+    timeout_s: float = 240.0
+    sandbox: str = "read-only"
+    isolation: str = "ephemeral"
+    max_instances: int = 1
+    blocking: bool = True
+    model: str | None = None
+    command: tuple[str, ...] = ()
+    failure_exit_codes: tuple[int, ...] = (1,)
+    working_directory: str | None = None
+    lineage: Lineage = field(default_factory=Lineage)
+
 
 @dataclass(frozen=True)
 class VerifierSpec:
@@ -49,27 +124,39 @@ class VerifierSpec:
     cost: float
     blocking: bool
     failure_modes: tuple[str, ...]
-    timeout_s: float = 120.0
+    template_id: str | None = None
+    objective: str = ""
+    prompt: str = ""
+    estimated_detection: Mapping[str, float] = field(default_factory=dict)
+    timeout_s: float = 240.0
+    sandbox: str = "read-only"
+    isolation: str = "ephemeral"
+    model: str | None = None
     command: tuple[str, ...] = ()
     failure_exit_codes: tuple[int, ...] = (1,)
     working_directory: str | None = None
-    prompt_template: str | None = None
-    model: str | None = None
-    sandbox: str = "read-only"
     lineage: Lineage = field(default_factory=Lineage)
 
 
 @dataclass(frozen=True)
-class EmpiricalScenario:
+class SharedBlindSpot:
     scenario_id: str
+    description: str
     weight: float
-    outcomes: Mapping[str, float]
+    affected_verifiers: tuple[str, ...]
+    failure_modes: tuple[str, ...]
+    residual_detection: float
+    sources: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
-class CalibrationData:
-    failure_scenarios: tuple[EmpiricalScenario, ...] = ()
-    clean_scenarios: tuple[EmpiricalScenario, ...] = ()
+class FeedbackGraph:
+    source_hash: str
+    behaviors: tuple[Behavior, ...]
+    failure_modes: tuple[FailureMode, ...]
+    verifiers: tuple[VerifierSpec, ...]
+    shared_blind_spots: tuple[SharedBlindSpot, ...]
+    uncertainties: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,11 +173,12 @@ class SourceSnapshot:
 @dataclass(frozen=True)
 class Selection:
     verifier_ids: tuple[str, ...]
+    expected_utility: float
     expected_coverage: float
-    expected_false_alarm: float
+    residual_risk: float
     total_cost: float
     feasible: bool
-    evaluated_subsets: int
+    evaluated_candidates: int
 
 
 @dataclass(frozen=True)
@@ -102,12 +190,14 @@ class VerifierResult:
     blocking: bool
     reproducible: bool
     duration_s: float
+    failure_modes: tuple[str, ...] = ()
     evidence: tuple[EvidenceItem, ...] = ()
     command: tuple[str, ...] = ()
     stdout: str = ""
     stderr: str = ""
     exit_code: int | None = None
     error: str | None = None
+    confidence: float = 0.0
     lineage: Lineage = field(default_factory=Lineage)
 
 
@@ -116,6 +206,7 @@ class Decision:
     kind: DecisionKind
     reason: str
     snapshot: SourceSnapshot
+    graph: FeedbackGraph | None = None
     selection: Selection | None = None
     results: tuple[VerifierResult, ...] = ()
     report_path: str | None = None
@@ -141,6 +232,7 @@ class RunConfig:
     output_schema: Path | None = None
     isolate_config: bool = False
     disable_hooks: bool = False
+    skip_git_repo_check: bool = False
 
 
 def to_jsonable(value: Any) -> Any:

@@ -8,12 +8,19 @@ from pathlib import Path
 
 from graft.codex import CliCodexRunner
 from graft.evidence.snapshot import freeze_source
-from graft.schema import Lineage, VerifierSpec, Verdict
+from graft.schema import (
+    Behavior,
+    FailureMode,
+    FeedbackGraph,
+    Lineage,
+    VerifierSpec,
+    Verdict,
+)
 from graft.verifiers import VerifierExecutor
 
 
 class CodexReviewerTests(unittest.TestCase):
-    def test_fresh_reviewer_is_parsed_and_remains_nonblocking(self) -> None:
+    def test_fresh_reviewer_is_parsed_and_does_not_mutate_producer(self) -> None:
         fixture = Path(__file__).parent / "fixtures" / "fake_codex.py"
         runner = CliCodexRunner((sys.executable, str(fixture)))
         executor = VerifierExecutor(codex_runner=runner)
@@ -21,35 +28,47 @@ class CodexReviewerTests(unittest.TestCase):
             root = Path(directory)
             (root / "source.py").write_text("value = 1\n", encoding="utf-8")
             config_path = root / "config.json"
-            config_path.write_text(json.dumps({"version": 1}), encoding="utf-8")
-            schema_path = root / "schema.json"
-            schema_path.write_text("{}", encoding="utf-8")
+            config_path.write_text(json.dumps({"version": 2}), encoding="utf-8")
             source = freeze_source(
                 root,
                 requirements=("Keep value correct",),
                 config_path=config_path,
+                environment_fingerprint="test",
+            )
+            failure = FailureMode("f", "b", "value is wrong", "semantic", (), (), 1)
+            spec = VerifierSpec(
+                verifier_id="review",
+                kind="codex_review",
+                cost=1,
+                blocking=False,
+                failure_modes=("f",),
+                objective="verify the task-specific value behavior",
+                prompt="derive evidence from the requirement",
+                estimated_detection={"f": 0.8},
+                lineage=Lineage(provider="openai"),
+            )
+            graph = FeedbackGraph(
+                source.checkpoint_key,
+                (Behavior("b", "keep value correct", (), ("value",), 1, 1, 0),),
+                (failure,),
+                (spec,),
+                (),
             )
             result = executor.run(
-                VerifierSpec(
-                    verifier_id="review",
-                    kind="codex_review",
-                    cost=1,
-                    blocking=False,
-                    failure_modes=("incomplete_fix",),
-                    lineage=Lineage(provider="openai"),
-                ),
+                spec,
                 source,
                 requirements=("Keep value correct",),
+                graph=graph,
                 config_path=config_path,
-                verdict_schema=schema_path,
+                environment_fingerprint="test",
             )
             self.assertEqual(result.verdict, Verdict.PASS)
             self.assertFalse(result.blocking)
-            self.assertEqual(result.source_hash, source.checkpoint_key)
             after = freeze_source(
                 root,
                 requirements=("Keep value correct",),
                 config_path=config_path,
+                environment_fingerprint="test",
             )
             self.assertEqual(source.tree_hash, after.tree_hash)
 

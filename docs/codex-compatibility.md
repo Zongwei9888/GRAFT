@@ -16,9 +16,12 @@ codex plugin --help
 graft doctor
 ```
 
-GRAFT 0.4.0 was locally exercised against `codex-cli 0.147.0`. A compatible build must expose
+GRAFT 0.5.0 requires a compatible Codex build exposing
 plugin marketplaces, command hooks for `UserPromptSubmit`, `PostToolUse`, and `Stop`, and the
-non-interactive JSON event mode used by isolated reviewers. Hooks still require user approval.
+non-interactive JSON event mode with structured output used by the task modeler, registry planner,
+and isolated verifiers. Hooks still require user approval. Run the release smoke test against the
+exact CLI version reported by `codex --version` rather than assuming compatibility from a stale
+version string in this document.
 
 The model service, account authentication, IDE extension, and cloud execution are not bundled with
 GRAFT. Open-source CLI code does not turn the hosted Codex model into a local dependency.

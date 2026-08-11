@@ -1,112 +1,121 @@
 {
   "$schema": "../schemas/graft_config.schema.json",
-  "version": 1,
+  "version": 2,
+  "method": "graft-original",
   "enabled": true,
-  "budget": 2.0,
-  "max_set_fpr": 0.05,
+  "budget": 4.0,
   "checkpoint_mode": "completion",
   "max_feedback_rounds": 2,
   "failure_policy": "open",
-  "environment_fingerprint": "python-local-v1",
-  "verifiers": [
+  "environment_fingerprint": "graft-original-dynamic-v1",
+  "modeling": {
+    "behavior_modeler": {
+      "model": null,
+      "timeout_s": 120,
+      "prompt_family": "graft-original-behavior-v1"
+    },
+    "verifier_planner": {
+      "model": null,
+      "timeout_s": 120,
+      "prompt_family": "graft-original-verifier-planner-v1"
+    }
+  },
+  "verifier_templates": [
     {
-      "id": "python-compile",
-      "kind": "command",
-      "cost": 0.5,
+      "id": "repository-evidence-agent",
+      "kind": "codex_agent",
+      "role": "repository-declared deterministic evidence agent",
+      "instructions": "Derive a task-relevant direct-argv command from repository-owned declarations and execute it only in the disposable copy.",
+      "capabilities": ["repository-tool-discovery", "deterministic-execution", "runtime-evidence"],
+      "cost": 1.25,
+      "timeout_s": 180,
+      "sandbox": "workspace-write",
+      "isolation": "temporary-copy",
+      "max_instances": 2,
       "blocking": true,
-      "failure_modes": ["build_type_api_schema_failure"],
-      "timeout_s": 30,
-      "command": ["python3", "-m", "compileall", "-q", "src", "tests"],
-      "failure_exit_codes": [1],
+      "model": null,
       "lineage": {
-        "provider": "cpython",
-        "modality": ["source"],
-        "oracle": "python-parser"
+        "provider": "openai-codex",
+        "thread_policy": "fresh-ephemeral-copy",
+        "prompt_family": "repository-evidence-agent-v1",
+        "context_sources": ["raw-requirements", "workspace-copy", "repository-tool-declarations"],
+        "modality": ["text", "source", "execution"],
+        "oracle": "repository-declared-command"
       }
     },
     {
-      "id": "unit-tests",
-      "kind": "command",
-      "cost": 1.5,
-      "blocking": true,
-      "failure_modes": [
-        "direct_requirement_failure",
-        "backward_compatibility_failure",
-        "state_or_side_effect_failure"
-      ],
-      "timeout_s": 90,
-      "command": ["python3", "scripts/run_tests.py"],
-      "failure_exit_codes": [1],
-      "lineage": {
-        "provider": "local-tests",
-        "modality": ["execution"],
-        "oracle": "unittest",
-        "test_author": "graft-project"
-      }
-    },
-    {
-      "id": "codex-fresh-review",
+      "id": "semantic-reviewer",
       "kind": "codex_review",
-      "cost": 2.5,
-      "blocking": false,
-      "failure_modes": [
-        "direct_requirement_failure",
-        "wrong_target_or_incomplete_fix",
-        "backward_compatibility_failure"
-      ],
+      "role": "independent semantic requirements reviewer",
+      "instructions": "Inspect raw requirements and observable state; challenge semantic omissions.",
+      "capabilities": ["requirements", "source", "diff", "semantic-review"],
+      "cost": 1.0,
       "timeout_s": 120,
       "sandbox": "read-only",
+      "isolation": "ephemeral",
+      "max_instances": 2,
+      "blocking": true,
+      "model": null,
       "lineage": {
-        "provider": "openai",
+        "provider": "openai-codex",
         "thread_policy": "fresh-ephemeral",
-        "prompt_family": "graft-repository-review-v1",
-        "context_sources": ["raw-requirements", "repository", "candidate-state"],
+        "prompt_family": "semantic-reviewer-v1",
+        "context_sources": ["raw-requirements", "workspace", "diff"],
         "modality": ["text", "source"],
-        "oracle": "model-semantic-review"
+        "oracle": "model-review"
+      }
+    },
+    {
+      "id": "agentic-evidence-reviewer",
+      "kind": "codex_agent",
+      "role": "agentic environment and execution reviewer",
+      "instructions": "Use read-only tools to derive task-specific observed evidence.",
+      "capabilities": ["repository-search", "tool-execution", "runtime-evidence"],
+      "cost": 1.5,
+      "timeout_s": 180,
+      "sandbox": "read-only",
+      "isolation": "ephemeral",
+      "max_instances": 2,
+      "blocking": true,
+      "model": null,
+      "lineage": {
+        "provider": "openai-codex",
+        "thread_policy": "fresh-ephemeral",
+        "prompt_family": "agentic-evidence-reviewer-v1",
+        "context_sources": ["raw-requirements", "workspace", "runtime"],
+        "modality": ["text", "source", "execution"],
+        "oracle": "agentic-observation"
+      }
+    },
+    {
+      "id": "test-agent",
+      "kind": "codex_agent",
+      "role": "task-specific adversarial test agent",
+      "instructions": "Derive and execute task-specific checks only in the disposable copy.",
+      "capabilities": ["test-generation", "tool-execution", "adversarial-cases"],
+      "cost": 2.0,
+      "timeout_s": 240,
+      "sandbox": "workspace-write",
+      "isolation": "temporary-copy",
+      "max_instances": 1,
+      "blocking": true,
+      "model": null,
+      "lineage": {
+        "provider": "openai-codex",
+        "thread_policy": "fresh-ephemeral-copy",
+        "prompt_family": "test-agent-v1",
+        "context_sources": ["raw-requirements", "workspace-copy", "generated-tests"],
+        "modality": ["text", "source", "execution"],
+        "oracle": "generated-executable-check",
+        "test_author": "independent-codex-test-agent"
       }
     }
   ],
-  "calibration": {
-    "failure_scenarios": [
-      {
-        "id": "syntax-import-failure",
-        "weight": 1.0,
-        "detections": {
-          "python-compile": 1.0,
-          "unit-tests": 0.8,
-          "codex-fresh-review": 0.4
-        }
-      },
-      {
-        "id": "direct-behavior-failure",
-        "weight": 1.0,
-        "detections": {
-          "python-compile": 0.0,
-          "unit-tests": 1.0,
-          "codex-fresh-review": 0.7
-        }
-      },
-      {
-        "id": "semantic-incomplete-fix",
-        "weight": 1.0,
-        "detections": {
-          "python-compile": 0.0,
-          "unit-tests": 0.5,
-          "codex-fresh-review": 0.8
-        }
-      }
-    ],
-    "clean_scenarios": [
-      {
-        "id": "clean-local",
-        "weight": 1.0,
-        "false_alarms": {
-          "python-compile": 0.0,
-          "unit-tests": 0.0,
-          "codex-fresh-review": 0.15
-        }
-      }
-    ]
+  "selection": {
+    "algorithm": "lazy-greedy-hypergraph",
+    "max_verifiers": 4,
+    "min_marginal_gain_per_cost": 0.01,
+    "residual_risk_threshold": 0.2
   },
-  "_note": "Operational fixture probabilities for local product testing only; not paper calibration evidence."
+  "_method_contract": "docs/method-original-frozen.md"
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -68,6 +69,64 @@ def _iter_source_entries(
             yield relative, path
 
 
+def _iter_git_entries(
+    root: Path,
+    excluded_dirs: frozenset[str],
+    excluded_files: frozenset[str],
+) -> Iterable[tuple[str, Path]] | None:
+    """Use repository ignore policy when ``root`` is the Git worktree root."""
+
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+        if top.returncode != 0 or Path(os.fsdecode(top.stdout).strip()).resolve() != root:
+            return None
+        listed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if listed.returncode != 0:
+        return None
+    entries: list[tuple[str, Path]] = []
+    for encoded in listed.stdout.split(b"\0"):
+        if not encoded:
+            continue
+        relative_path = Path(os.fsdecode(encoded))
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            continue
+        if any(
+            part in excluded_dirs or part.endswith(".egg-info")
+            for part in relative_path.parts[:-1]
+        ):
+            continue
+        if (
+            relative_path.name in excluded_files
+            or relative_path.suffix in {".pyc", ".pyo"}
+        ):
+            continue
+        entries.append((relative_path.as_posix(), root / relative_path))
+    return tuple(sorted(entries, key=lambda item: item[0]))
+
+
 def hash_tree(
     root: Path,
     *,
@@ -80,7 +139,10 @@ def hash_tree(
 
     digest = hashlib.sha256()
     names: list[str] = []
-    for relative, path in _iter_source_entries(resolved, excluded_dirs, excluded_files):
+    entries = _iter_git_entries(resolved, excluded_dirs, excluded_files)
+    if entries is None:
+        entries = _iter_source_entries(resolved, excluded_dirs, excluded_files)
+    for relative, path in entries:
         names.append(relative)
         relative_bytes = relative.encode("utf-8", errors="surrogatepass")
         digest.update(len(relative_bytes).to_bytes(8, "big"))
