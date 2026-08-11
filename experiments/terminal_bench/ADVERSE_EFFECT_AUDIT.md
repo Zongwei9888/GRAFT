@@ -130,6 +130,25 @@ not calibrated wall time, tokens, or money. Child Codex verifier usage is not
 reported separately by the Harbor adapter. This prevents the current selector
 and experiment logs from estimating net value reliably even after the run.
 
+### H11 — a changed Stop boundary is not semantic task completion
+
+Codex `Stop` is a turn lifecycle event, not proof that a multi-turn user task is
+ready for delivery. The current `completion` policy checks that the workspace
+changed relative to its baseline but deliberately discards
+`last_assistant_message`; its effective predicate is therefore
+`workspace_changed_at_stop_boundary`. Terminal-Bench's one-task/one-turn shape
+mostly hides this mismatch. In an ordinary Codex session, an implementation
+phase, clarification, question, or intermediate report can end a turn after
+changing files and trigger a full GRAFT pass prematurely.
+
+`Stop` remains the correct technical attachment point because it offers a
+stable candidate and can continue the same Codex flow. It requires a separate,
+cheap semantic eligibility gate: verify only a delivery candidate, and only
+when the best verifier has positive marginal net value over the producer's
+existing evidence. `SessionEnd` is unsuitable because it is advisory, may
+occur much later, and cannot keep the producer thread open. This correction is
+recorded but not implemented in the frozen treatment evaluated above.
+
 ## Measurement correction
 
 The next treatment enables an observation-only checkpoint archive outside the

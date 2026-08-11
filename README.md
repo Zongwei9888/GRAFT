@@ -8,7 +8,9 @@ and runs the selected verifiers.
 
 The original research method is frozen in
 [`docs/method-original-frozen.md`](docs/method-original-frozen.md). The DOCX named there remains the
-authoritative specification.
+authoritative specification. The consolidated Chinese definition of what GRAFT does, where LLMs
+participate, what counts as hardcoding, and why a changed `Stop` is not by itself task completion is
+recorded in [`docs/graft-core-definition-zh.md`](docs/graft-core-definition-zh.md).
 
 ## What changed in 0.5
 
