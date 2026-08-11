@@ -10,7 +10,9 @@ The original research method is frozen in
 [`docs/method-original-frozen.md`](docs/method-original-frozen.md). The DOCX named there remains the
 authoritative specification. The consolidated Chinese definition of what GRAFT does, where LLMs
 participate, what counts as hardcoding, and why a changed `Stop` is not by itself task completion is
-recorded in [`docs/graft-core-definition-zh.md`](docs/graft-core-definition-zh.md).
+recorded in [`docs/graft-core-definition-zh.md`](docs/graft-core-definition-zh.md). The staged,
+gate-driven correction plan is in
+[`docs/graft-optimization-plan-zh.md`](docs/graft-optimization-plan-zh.md).
 
 ## What changed in 0.5
 
