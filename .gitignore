@@ -19,9 +19,5 @@ experiments/terminal_bench/jobs/
 .graft/telemetry/
 *.graft-backup-*
 
-# Keep unpublished paper drafts and local research audits out of the public code repository.
+# Keep the unpublished paper draft out of the public code repository.
 *.docx
-GRAFT_WSDM*.md
-GRAFT_v1_WSDM*.md
-GRAFT_研究*.md
-GRAFT_原稿*.md
