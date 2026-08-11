@@ -1,7 +1,8 @@
 # GRAFT adverse-effect audit and causal evaluation protocol
 
-Status: causal hypotheses and the next task are pre-registered before task
-download or execution.
+Status: two causal pilots have been executed under pre-registered task selection
+and evaluation order. Their exact checkpoint replays show cost-only adverse net
+utility, rather than semantic feedback harm, on both new trajectories.
 
 ## What the first four pairs do and do not show
 
@@ -109,6 +110,25 @@ verifier timed out. The controller consequently returned unresolved and, under
 the fail-open product policy, sent no continuation. The generic correction now
 compares parsed argv/shell payload fingerprints rather than substrings or raw
 renderings.
+
+### H10 — positive detection utility is not positive net utility
+
+The frozen selector calls its objective `expected_utility`, but the quantity is
+risk-weighted expected detection. Cost is used only to rank positive marginal
+gain, not subtracted from benefit; repair probability, value of a successful
+repair, producer evidence already collected, and the option to stop without
+verification are absent. On `shadow-relay`, the graph correctly modeled severe
+same-Codex and no-oracle blind spots. The selected set nevertheless had only
+0.0512 expected coverage and 0.9488 residual risk, because any positive
+gain/cost ratio above 0.01 remained selectable. One verifier then consumed its
+240-second timeout and the other could validate only output shape. The
+checkpoint was already 8/8 correct, so the approximately 6m47s Stop phase had
+zero causal reward gain.
+
+The configured costs (1.25 and 2.0 in this run) are also nominal planner units,
+not calibrated wall time, tokens, or money. Child Codex verifier usage is not
+reported separately by the Harbor adapter. This prevents the current selector
+and experiment logs from estimating net value reliably even after the run.
 
 ## Measurement correction
 
@@ -274,3 +294,47 @@ only eight CPUs. No task content or verifier details were inspected. Per the
 frozen fallback rule, the next task is `terminal-bench/shadow-relay`; its GRAFT
 and Native configurations were committed before downloading or inspecting the
 task.
+
+## Prospective result: `shadow-relay`
+
+The fallback oracle passed all eight official tests. The frozen treatment,
+checkpoint replay, and Native control then ran in the pre-registered order.
+
+| Outcome | Value |
+|---|---:|
+| Official oracle | 1.0 (8/8) |
+| GRAFT first-Stop checkpoint replay | 1.0 (8/8) |
+| GRAFT final | 1.0 (8/8) |
+| Native Codex | 1.0 (8/8) |
+| GRAFT continuations | 0 |
+| `delta_feedback` | 0.0 |
+
+The archived checkpoint SHA-256 is
+`c8fcd5c0e0ba79e96fb06c002a2b31a3fbac8464df61f5b1e1cfaa87daa3f56c`
+and its checkpoint key is
+`933fc03da13b6c4ea430bf15b0110c08a24826fe23def46b8cd317e7f1fe4f49`.
+The replay-only agent validated both identifiers before restoring the exact
+candidate. All three scored candidates passed the same eight official checks.
+
+This prospective run validates the H7–H9 implementation mechanically: the
+non-Git task baseline was archived, the checkpoint contained the exact output
+files, and command evidence no longer failed merely because of shell-path
+rendering. It does not show an effectiveness gain. The treatment had already
+reached the score ceiling before GRAFT ran.
+
+The graph contained 13 task-specific failure modes and seven candidates, with
+seven explicit higher-order blind spots. It selected
+`adversarial-end-to-end-test` plus `repo-evidence-output-contract` at nominal
+cost 3.25. Expected coverage was 0.0512 and residual risk was 0.9488. The first
+verifier timed out after 240 seconds. The second abstained after confirming
+only the required JSON shape and flag path; no repository-owned answer oracle
+existed. The fail-open product policy therefore allowed the already-correct
+candidate to stop as unresolved.
+
+Checkpoint creation occurred 32m16s after treatment agent execution began;
+agent execution ended 6m47s later with no continuation. Native agent execution
+was 19m27s and treatment agent execution was 39m03s. Because the producer
+trajectories are independent and stochastic, the 19m36s difference between
+those two agent-execution totals is descriptive, not a causal GRAFT overhead
+estimate. The same-trajectory 6m47s post-checkpoint interval is the applicable
+causal cost observation for this run.

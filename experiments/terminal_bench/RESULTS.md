@@ -662,6 +662,82 @@ workspace and exposes a bounded semantic diff to LLM modelers and verifiers;
 requires ambiguous branches to produce competing hypotheses and discriminating
 inputs rather than disappearing; and recognizes structurally equivalent shell
 commands using parsed argv/payload fingerprints. No MMD, benchmark task, hidden
-test name, or fixed domain verifier was added. These changes pass 73 unit and
-integration tests but were designed after unblinding and therefore require a
-new unseen task for valid evaluation.
+test name, or fixed domain verifier was added. The current repository passes all
+76 unit and integration tests, but these changes were designed after unblinding
+and therefore require a new unseen task for valid evaluation.
+
+## 2026-08-12: Terminal-Bench 3 `shadow-relay`
+
+This is the prospective evaluation of the H7–H9 generic correction on a new
+task selected before inspection. It is a ceiling-score, negative-net-utility
+result: GRAFT preserved a correct candidate but provided no reward gain and
+spent a long Stop phase.
+
+| Field | Native Codex | Codex + dynamic GRAFT |
+|---|---:|---:|
+| Harbor reward | 1.0 | 1.0 |
+| Hidden tests | 8 passed, 0 failed | 8 passed, 0 failed |
+| First-Stop checkpoint replay | — | 1.0 (8/8) |
+| Input tokens | 4,709,059 | 14,423,065 |
+| Cached input tokens | 4,574,976 | 14,147,840 |
+| Output tokens | 49,631 | 70,888 |
+| Estimated producer model cost | USD 4.446833 | USD 10.576685 |
+| Agent setup | 4m05s | 2m12s |
+| Agent execution | 19m27s | 39m03s |
+| Hidden verifier | 14.4s | 14.7s |
+| Total wall time | 24m01s | 41m46s |
+
+Both arms used Terminal-Bench 3 revision 10 at dataset digest
+`sha256:88433fbcecd1a3f81f7a71bff4cc76c394d0edbefb7e028f90d4109b639fefba`,
+task ref
+`sha256:a677da5665a8276811f95752ac917de653d970cf2293c8345322b6101768eca0`,
+Codex CLI 0.147.0, `gpt-5.6-sol`, and high reasoning. The treatment pinned
+GRAFT commit `4c8041c8d397dc5318d557a3e5ca41b5013a4af6`. Trial IDs were
+`shadow-relay__tUEcSQm` (GRAFT), `shadow-relay__AnpUu7A` (checkpoint
+replay), and `shadow-relay__5R5zDKo` (Native).
+
+### Exact causal result
+
+The first Stop archive has SHA-256
+`c8fcd5c0e0ba79e96fb06c002a2b31a3fbac8464df61f5b1e1cfaa87daa3f56c`
+and checkpoint key
+`933fc03da13b6c4ea430bf15b0110c08a24826fe23def46b8cd317e7f1fe4f49`.
+The evaluator-only replay verified both values and passed the same eight checks
+as the final treatment. GRAFT issued no continuation, so
+`delta_feedback = 0.0`: there was neither feedback-induced semantic harm nor
+feedback-induced improvement.
+
+The checkpoint was created 32m16s after treatment agent execution began. The
+Stop phase then consumed approximately 6m47s before the producer process ended,
+without changing the workspace. This interval is a same-trajectory causal cost
+observation. The much larger Native-versus-treatment differences in tokens,
+recorded producer cost, and total execution time are not causal estimates,
+because the independent Codex trajectories followed different search paths.
+The child Codex verifier token usage is not currently recorded separately, so
+the table understates total GRAFT model cost.
+
+### Why the selector spent budget anyway
+
+The LLM graph was task-specific rather than hard-coded. It constructed six
+behaviors, 13 failure modes, seven verifier candidates, and seven higher-order
+blind spots covering shared Codex lineage, raw evidence, prompt family,
+generated-test authorship, repository-oracle absence, and ambiguous protocol
+semantics. The common-failure model therefore worked as intended.
+
+The selected `adversarial-end-to-end-test` and
+`repo-evidence-output-contract` cost 3.25 nominal units but offered only 0.0512
+modeled coverage, leaving 0.9488 residual risk. The adversarial verifier timed
+out after 240 seconds. The repository verifier abstained: it confirmed JSON
+shape, field lengths, output path, and plain-text presentation, but correctly
+refused to invent ground-truth incident values. Fail-open policy allowed the
+candidate to stop as unresolved.
+
+The defect is in decision utility, not task generalization. The selector's
+`expected_utility` is risk-weighted expected detection, not benefit minus real
+wall/token cost and not expected successful repair. It has no explicit No-Op
+comparison beyond a very low marginal detection-per-nominal-cost threshold.
+Moreover, PostToolUse currently stores only hashes and the modeler never reads
+them, so the selector cannot discount the 90-plus producer tool events already
+spent reproducing the same network, VM, and cryptographic evidence. This run
+prospectively confirms H2, H3, and the newly named H10 while providing no
+evidence of a benchmark-success advantage.
