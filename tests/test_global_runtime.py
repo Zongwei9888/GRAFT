@@ -68,6 +68,10 @@ class GlobalRuntimeTests(unittest.TestCase):
             document = json.loads(hooks_path.read_text(encoding="utf-8"))
             self.assertEqual(document["description"], "existing")
             self.assertIn("SessionStart", document["hooks"])
+            self.assertEqual(
+                document["hooks"]["Stop"][-1]["hooks"][0]["timeout"],
+                600,
+            )
 
             removed = uninstall_global_hooks(codex_home=codex_home)
             self.assertEqual(removed.removed_handlers, 3)

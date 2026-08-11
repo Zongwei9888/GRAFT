@@ -33,7 +33,7 @@
             "type": "command",
             "command": "/usr/bin/env python3 \"$PLUGIN_ROOT/scripts/graft_plugin.py\" hook stop --installation-id graft-plugin-v1",
             "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\graft_plugin.py\" hook stop --installation-id graft-plugin-v1",
-            "timeout": 120,
+            "timeout": 600,
             "statusMessage": "GRAFT is verifying this checkpoint"
           }
         ]

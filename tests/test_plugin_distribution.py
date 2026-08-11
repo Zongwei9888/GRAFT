@@ -52,6 +52,12 @@ class PluginDistributionTests(unittest.TestCase):
                 for handler in group["hooks"]:
                     self.assertIn("$PLUGIN_ROOT", handler["command"])
                     self.assertIn("graft-plugin-v1", handler["command"])
+        stop_handler = hooks["Stop"][0]["hooks"][0]
+        self.assertGreaterEqual(
+            stop_handler["timeout"],
+            600,
+            "The Stop window must cover both sequential modelers and the longest verifier",
+        )
 
     def test_bundled_runtime_matches_core_source(self) -> None:
         completed = subprocess.run(
