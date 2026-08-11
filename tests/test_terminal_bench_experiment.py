@@ -257,6 +257,37 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertIn("context.metadata", source)
         self.assertNotIn("codex", source.lower())
 
+    def test_distributed_dedup_causal_pair_is_frozen_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT / "configs" / "distributed-dedup-graft-causal-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "distributed-dedup-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/distributed-dedup"],
+        )
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "8a0465f5cd1b6b9735a900ceb9c6ec676cabf00d",
+        )
+        self.assertEqual(
+            graft["agents"][0]["env"]["GRAFT_CHECKPOINT_ARCHIVE_HOME"],
+            "/logs/agent/graft-checkpoints",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
