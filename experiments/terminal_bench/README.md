@@ -9,8 +9,9 @@ fixture, or benchmark-specific verifier is installed. At a changed Stop
 checkpoint, the plugin derives Behaviors and Failure Modes from the raw public
 instruction and workspace, retrieves task-specific verifier candidates from
 four domain-neutral capability templates, models their shared lineage, and
-selects a set under budget. Any reproducible failure is returned to the same
-Codex session.
+selects a set under budget. Only a failure observed in the authoritative runtime
+or by an unchanged baseline-repository oracle is returned to the same Codex
+session; source review and verifier-generated tests remain advisory.
 
 ## Requirements
 
@@ -22,10 +23,14 @@ Codex session.
 Raw jobs under `experiments/terminal_bench/jobs/` are ignored by Git because
 they contain local execution metadata and may contain sensitive agent logs.
 
-## GRAFT Original v0.5 pilot
+## GRAFT Original v0.5 pilots
 
-The first no-profile pilot uses the CPU-only Terminal-Bench 3 task
-`terminal-bench/html-js-filter`:
+The first no-profile pilot used the CPU-only Terminal-Bench 3 task
+`terminal-bench/html-js-filter`. The second used
+`terminal-bench/payments-pipeline-fix`; both have frozen matched native configs
+under `configs/` and complete negative-result analyses in `RESULTS.md`.
+
+The first task was pinned as follows:
 
 ```text
 Terminal-Bench 3 dataset revision: 10
