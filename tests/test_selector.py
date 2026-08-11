@@ -13,12 +13,18 @@ from graft.schema import (
 from graft.selection import InvalidFeedbackGraph, OriginalHypergraphSelector
 
 
-def verifier(identifier: str, probability: float, cost: float = 1.0) -> VerifierSpec:
+def verifier(
+    identifier: str,
+    probability: float,
+    cost: float = 1.0,
+    *,
+    blocking: bool = True,
+) -> VerifierSpec:
     return VerifierSpec(
         verifier_id=identifier,
         kind="codex_review",
         cost=cost,
-        blocking=True,
+        blocking=blocking,
         failure_modes=("f",),
         estimated_detection={"f": probability},
     )
@@ -37,6 +43,26 @@ def graph(*, blind_spots: tuple[SharedBlindSpot, ...] = ()) -> FeedbackGraph:
 
 
 class OriginalSelectorTests(unittest.TestCase):
+    def test_nonblocking_detection_does_not_consume_stop_gating_budget(self) -> None:
+        custom = FeedbackGraph(
+            source_hash="checkpoint",
+            behaviors=(Behavior("b", "required behavior", (), ("result",), 1, 1, 0),),
+            failure_modes=(
+                FailureMode("f", "b", "behavior fails", "dynamic", (), (), 1),
+            ),
+            verifiers=(
+                verifier("advisory", 0.99, blocking=False),
+                verifier("actionable", 0.4, blocking=True),
+            ),
+            shared_blind_spots=(),
+        )
+        selected = OriginalHypergraphSelector().select(
+            custom,
+            budget=1,
+            policy=SelectionPolicy("lazy-greedy-hypergraph", 1, 0, 1),
+        )
+        self.assertEqual(selected.verifier_ids, ("actionable",))
+
     def test_high_order_common_failure_changes_the_selected_pair(self) -> None:
         shared = SharedBlindSpot(
             "same-interpretation",

@@ -28,6 +28,7 @@ class EvidenceItem:
     line: int | None = None
     command: tuple[str, ...] = ()
     failure_modes: tuple[str, ...] = ()
+    requirement_refs: tuple[str, ...] = ()
     oracle_origin: str = "unspecified"
 
 

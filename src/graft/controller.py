@@ -265,7 +265,11 @@ class GraftController:
                     for item in result.evidence
                     if item.command
                     and item.oracle_origin
-                    in {"authoritative_runtime", "baseline_repository"}
+                    in {
+                        "authoritative_runtime",
+                        "baseline_repository",
+                        "requirement_derived_runtime",
+                    }
                     and set(item.failure_modes) & set(result.failure_modes)
                 ]
                 if result.command:

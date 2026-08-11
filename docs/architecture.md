@@ -46,9 +46,9 @@ Security boundaries:
 - model stages run in fresh ephemeral threads with hooks/user config/rules isolated;
 - writable verifier agents use disposable copies;
 - task-start per-file hashes separate unchanged baseline oracles from candidate-authored artifacts;
-- model-only suspicions, generated mocks, candidate checks, and source-display commands cannot
-  become blocking evidence; an authoritative runtime observation or unchanged baseline oracle is
-  required;
+- model-only suspicions, generated mocks, candidate contracts, and source-display commands cannot
+  become blocking evidence; an authoritative runtime observation, unchanged baseline oracle, or
+  raw-requirement-derived executable counterexample against the actual candidate is required;
 - verifier network access is off by default and requires a reviewed project opt-in;
 - verifier execution must leave the producer checkpoint unchanged;
 - evidence produced for one source hash cannot gate another.

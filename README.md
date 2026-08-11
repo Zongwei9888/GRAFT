@@ -95,16 +95,19 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
    unchanged baseline repository rules, state, and diff. Candidate-added or modified files cannot
    introduce a new contract.
 5. A second isolated structured call instantiates verifier candidates from general capabilities,
-   estimates task-conditional detection, and describes high-order shared blind spots.
+   estimates the chance of producing *eligible reproducible evidence* (not merely noticing a
+   suspicious pattern), and describes high-order shared blind spots.
 6. The selector greedily maximizes risk-weighted expected detection per unit cost, with a best
    singleton fallback. Shared model, prompt, context, modality, test author, and oracle sources
    reduce apparent complementarity.
 7. Selected reviewers and agents run in fresh isolated sessions. A repository-evidence agent can
    derive one direct argv check from visible project declarations, and writable verifier agents
    work only in disposable copies.
-8. Only an observed authoritative-runtime failure or an unchanged baseline-repository oracle can
-   continue the producer Codex session. Generated mocks, candidate-authored checks, source-review
-   suspicions, errors, abstentions, and capability gaps do not become blocking evidence.
+8. An observed authoritative-runtime failure, an unchanged baseline-repository oracle, or a
+   requirement-derived executable counterexample against the actual candidate can continue the
+   producer Codex session. Generated mocks, substitute implementations, candidate-authored
+   contracts, source-review suspicions, errors, abstentions, and capability gaps do not become
+   blocking evidence.
 
 Reports are source-bound and stored outside arbitrary target repositories in the platform's GRAFT
 state directory. The original producer workspace is checked again after verification so stale
@@ -145,8 +148,8 @@ suppressed, and feedback rounds are bounded.
 
 The implementation exercises the frozen method, but its task-conditional probability estimates
 are model estimates until calibrated on held-out tasks. Hidden benchmark labels must remain outside
-the online selector. The first two profile-free dynamic Terminal-Bench 3 pairs were negative
-(Native Codex 2/2, Codex + GRAFT 0/2); see the
+the online selector. The first three profile-free dynamic Terminal-Bench 3 pairs provide no
+positive effectiveness result; see the
 [recorded results](experiments/terminal_bench/RESULTS.md). The implementation is therefore a
 research prototype, not an established quality improvement.
 
@@ -160,8 +163,9 @@ reviewers, pairwise diversity, and run-all verification.
   hooks, user config, and repository rules disabled for isolation;
 - writable test agents run only in disposable workspace copies;
 - a model cannot make a blocking claim reproducible merely by setting a JSON flag or executing a
-  source-display command—GRAFT requires an authoritative runtime artifact or an unchanged
-  baseline-repository oracle mapped to the claimed failure mode;
+  source-display command—GRAFT requires an authoritative runtime artifact, an unchanged baseline
+  oracle, or a numbered-requirement-derived check executed against the actual candidate in a
+  disposable copy and mapped to the claimed failure mode;
 - verifier findings are bound to the exact requirement/config/workspace checkpoint;
 - failure policy defaults to fail-open with an explicit unresolved warning;
 - the selector never sees hidden benchmark outcomes.

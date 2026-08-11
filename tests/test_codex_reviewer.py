@@ -21,9 +21,18 @@ from graft.verifiers import VerifierExecutor
 
 
 class EvidenceRunner:
-    def __init__(self, *, origin: str, path: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        origin: str,
+        path: str | None = None,
+        kind: str = "command",
+        requirement_refs: tuple[str, ...] = (),
+    ) -> None:
         self.origin = origin
         self.path = path
+        self.kind = kind
+        self.requirement_refs = requirement_refs
 
     def start_thread(self, prompt, repo, config):
         command = ["python", "baseline_test.py"]
@@ -33,12 +42,13 @@ class EvidenceRunner:
             "summary": "observed mismatch",
             "evidence": [
                 {
-                    "kind": "command",
+                    "kind": self.kind,
                     "path": self.path,
                     "line": None,
                     "command": command,
                     "observation": "the check failed",
                     "failure_modes": ["f"],
+                    "requirement_refs": list(self.requirement_refs),
                     "oracle_origin": self.origin,
                 }
             ],
@@ -121,6 +131,9 @@ class CodexReviewerTests(unittest.TestCase):
         origin: str,
         path: str | None,
         baseline,
+        kind: str = "command",
+        requirement_refs: tuple[str, ...] = (),
+        isolation: str = "ephemeral",
     ):
         config_path = root / "config.json"
         source = freeze_source(
@@ -142,6 +155,7 @@ class CodexReviewerTests(unittest.TestCase):
             objective="exercise the public behavior",
             prompt="use an authoritative oracle",
             estimated_detection={"f": 0.8},
+            isolation=isolation,
             lineage=Lineage(provider="openai"),
         )
         graph = FeedbackGraph(
@@ -152,7 +166,12 @@ class CodexReviewerTests(unittest.TestCase):
             (),
         )
         return VerifierExecutor(
-            codex_runner=EvidenceRunner(origin=origin, path=path)
+            codex_runner=EvidenceRunner(
+                origin=origin,
+                path=path,
+                kind=kind,
+                requirement_refs=requirement_refs,
+            )
         ).run(
             spec,
             source,
@@ -177,6 +196,58 @@ class CodexReviewerTests(unittest.TestCase):
                 baseline=baseline,
             )
             self.assertEqual(result.verdict, Verdict.FAIL)
+            self.assertFalse(result.reproducible)
+
+    def test_requirement_derived_runtime_can_support_test_agent_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            result = self._run_evidence_case(
+                root,
+                origin="requirement_derived_runtime",
+                path=None,
+                baseline=baseline,
+                kind="test",
+                requirement_refs=("R1",),
+                isolation="temporary-copy",
+            )
+            self.assertTrue(result.reproducible)
+            self.assertEqual(result.failure_modes, ("f",))
+
+    def test_requirement_derived_runtime_requires_valid_raw_requirement_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            result = self._run_evidence_case(
+                root,
+                origin="requirement_derived_runtime",
+                path=None,
+                baseline=baseline,
+                kind="test",
+                requirement_refs=("R2",),
+                isolation="temporary-copy",
+            )
+            self.assertFalse(result.reproducible)
+
+    def test_requirement_derived_source_inspection_stays_nonblocking(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            baseline = freeze_source(root)
+            result = self._run_evidence_case(
+                root,
+                origin="requirement_derived_runtime",
+                path="source.py",
+                baseline=baseline,
+                kind="command",
+                requirement_refs=("R1",),
+                isolation="temporary-copy",
+            )
             self.assertFalse(result.reproducible)
 
     def test_unchanged_baseline_oracle_can_support_blocking_evidence(self) -> None:

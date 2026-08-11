@@ -64,8 +64,13 @@ def _conditional_miss(
 ) -> float:
     probability = 1.0
     for verifier in selected:
-        detection = float(
-            verifier.estimated_detection.get(failure.failure_mode_id, 0.0)
+        # A finding that is ineligible for Stop continuation cannot reduce the
+        # modeled risk of allowing the producer to stop. Advisory verifiers stay
+        # in the heterogeneous pool, but consume no feedback-gating utility.
+        detection = (
+            float(verifier.estimated_detection.get(failure.failure_mode_id, 0.0))
+            if verifier.blocking
+            else 0.0
         )
         if not 0 <= detection <= 1:
             raise InvalidFeedbackGraph(

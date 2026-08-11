@@ -240,7 +240,11 @@ def _planner_prompt(
 Create a rich task-specific candidate pool by instantiating only the general verifier templates
 provided below. Do not choose the final budgeted subset; GRAFT will do that. Each candidate must
 target concrete Failure Mode identifiers and receive a task-specific objective and prompt. Estimate
-detection probabilities conservatively. Explicitly identify higher-order shared blind spots caused
+detection probabilities conservatively. Here detection means the probability that the candidate
+will both discover the Failure Mode and return evidence eligible for reproducible Stop feedback
+under its sandbox, isolation, blocking flag, and available oracle—not merely notice a suspicious
+source pattern. A non-blocking advisory reviewer has zero Stop-gating detection probability.
+Explicitly identify higher-order shared blind spots caused
 by shared model, prompt, context, modality, test author, oracle, or task interpretation. Different
 candidate names or fresh threads are not evidence of independence. Report capability gaps instead
 of inventing unavailable tools. If two or more candidates share any material lineage source, the

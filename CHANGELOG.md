@@ -11,12 +11,17 @@ All notable changes follow semantic versioning.
 - add a profile-free, source-pinned Terminal-Bench 3 adapter and matched Native Codex control.
 - preserve a per-file task-baseline manifest so candidate-authored documentation, tests, and code
   cannot be promoted into authoritative task contracts;
-- require LLM evidence to name its oracle origin and target failure modes, and permit blocking only
-  from observed authoritative runtime or unchanged baseline-repository evidence;
+- require LLM evidence to name its oracle origin and target failure modes; permit blocking from
+  observed authoritative runtime, unchanged baseline oracles, or numbered-requirement-derived
+  executable counterexamples against the actual candidate while rejecting generated substitutes;
 - reject shared-lineage verifier plans that omit the frozen method's high-order blind-spot model;
 - add an explicit, reviewed opt-in for network access in workspace-write verifier sandboxes;
 - record a second negative profile-free Terminal-Bench 3 pair and its self-referential contract
   failure without crediting the post-hoc correction as effectiveness evidence.
+- record the prospective `bun-sourcemap-leak` negative pair, including the corrected provenance
+  behavior, missed executable counterexample, and lack of causal continuation feedback;
+- make the selector assign zero Stop-gating utility to non-blocking findings and redefine planner
+  detection estimates as the probability of producing eligible reproducible feedback.
 
 ## 0.5.0 - 2026-08-10
 

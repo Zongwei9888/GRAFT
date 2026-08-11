@@ -241,7 +241,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
         "checkpoint_mode": "completion",
         "max_feedback_rounds": 2,
         "failure_policy": "open",
-        "environment_fingerprint": "graft-original-dynamic-v2-authority",
+        "environment_fingerprint": "graft-original-dynamic-v3-grounded-runtime",
         "modeling": {
             "behavior_modeler": {
                 "model": None,
@@ -350,8 +350,10 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
                     "role": "task-specific adversarial test agent",
                     "instructions": (
                         "Work only in the disposable workspace copy. Derive task-specific checks "
-                        "from the raw requirements and targeted failure modes, execute them, and "
-                        "report concrete counterexamples without changing the producer workspace."
+                        "from numbered raw requirements and targeted failure modes, execute them "
+                        "against the actual candidate rather than a substitute mock, and report "
+                        "concrete requirement-grounded counterexamples without changing the "
+                        "producer workspace."
                     ),
                     "capabilities": ["test-generation", "tool-execution", "adversarial-cases"],
                     "cost": 2.0,

@@ -56,8 +56,10 @@ graft config enable
 | `selection` | Hypergraph selector and residual-risk thresholds |
 
 The runtime modeler creates Behaviors and Failure Modes. The planner creates concrete verifier IDs,
-objectives, prompts, target edges, detection estimates, lineage additions, and shared-blind-spot
-scenarios. These do not belong in a static project config.
+objectives, prompts, target edges, actionable-detection estimates, lineage additions, and
+shared-blind-spot scenarios. “Detection” here means producing evidence eligible for Stop feedback,
+not simply expressing a source-level concern. Non-blocking candidates therefore contribute zero
+Stop-gating utility. These task instances do not belong in a static project config.
 
 The machine-readable schemas are in [`schemas/`](../schemas/). Config version 1 is intentionally
 rejected by the product loader because it represented the fixed-fixture prototype.

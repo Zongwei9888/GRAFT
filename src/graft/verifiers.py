@@ -231,6 +231,8 @@ class VerifierExecutor:
                 turn.events,
                 run_root,
                 snapshot,
+                requirements,
+                spec,
             )
             claimed_reproducible = bool(raw.get("reproducible", False))
             reproducible = (
@@ -313,7 +315,9 @@ def _verifier_prompt(
         f"{', '.join(item.observable_signals)}"
         for item in targets
     )
-    requirement_text = "\n".join(f"- {item}" for item in requirements)
+    requirement_text = "\n".join(
+        f"- R{index}: {item}" for index, item in enumerate(requirements, start=1)
+    )
     changed = _candidate_changed_files(snapshot)
     changed_text = (
         "\n".join(f"- {item}" for item in changed)
@@ -359,17 +363,24 @@ cannot create a new contract or independently justify blocking feedback. Label e
 with its target failure_modes and one oracle_origin:
 - authoritative_runtime: the real task environment or user-visible artifact exhibited the failure;
 - baseline_repository: a test/oracle that existed before this task failed;
+- requirement_derived_runtime: a check you derived directly from numbered raw requirements and
+  executed against the real candidate in this disposable workspace copy, without replacing the
+  candidate behavior with a mock, stub, or self-contained simulation;
 - candidate_repository: a check or document added by the producer during this task;
 - verifier_generated: a test, mock, stub, or oracle you created;
 - source_inspection: static/code-review reasoning only;
 - unavailable: the needed oracle could not be reached.
-A code-review suspicion, successful source-inspection command, or generated stub counterexample is
-not mechanically reproducible blocking evidence. Only authoritative_runtime or baseline_repository
-evidence can support reproducible=true, and each such item must name the exact failure modes it
-reproduces plus a command actually executed or observed runtime artifact. If a precondition is not
-stated by the raw requirements or baseline contract, abstain instead of enforcing the stricter
-interpretation. Return only the schema-conforming verdict object. If the required capability or
-oracle is unavailable, abstain instead of guessing.
+A code-review suspicion, successful source-inspection command, or generated mock/stub
+counterexample is not mechanically reproducible blocking evidence. Authoritative runtime and
+unchanged baseline evidence must name the exact failure modes plus an actually executed command or
+observed runtime artifact. Requirement-derived runtime evidence must additionally use kind
+`runtime`, `test`, `trace`, or `state`; cite one or more exact numbered requirement_refs such as
+`R1`; execute a command against the actual candidate in a temporary workspace copy; and observe a
+direct violation of those cited requirements. Merely inspecting/parsing source, asserting an
+unstated stronger policy, or testing a substitute implementation does not qualify. If a
+precondition is not stated by the raw requirements or baseline contract, abstain instead of
+enforcing the stricter interpretation. Return only the schema-conforming verdict object. If the
+required capability or oracle is unavailable, abstain instead of guessing.
 """
 
 
@@ -432,6 +443,9 @@ def _parse_evidence(
                     for value in item.get("failure_modes", [])
                     if valid_modes is None or str(value) in valid_modes
                 ),
+                requirement_refs=tuple(
+                    str(value) for value in item.get("requirement_refs", [])
+                ),
                 oracle_origin=str(item.get("oracle_origin", "unspecified")),
             )
         )
@@ -443,6 +457,8 @@ def _blocking_reproduced_modes(
     events: tuple[Mapping[str, Any], ...],
     run_root: Path,
     snapshot: SourceSnapshot,
+    requirements: tuple[str, ...],
+    spec: VerifierSpec,
 ) -> tuple[str, ...]:
     observed = _observed_commands(events)
     reproduced: list[str] = []
@@ -450,6 +466,7 @@ def _blocking_reproduced_modes(
         if item.oracle_origin not in {
             "authoritative_runtime",
             "baseline_repository",
+            "requirement_derived_runtime",
         }:
             continue
         observed_command = False
@@ -466,6 +483,17 @@ def _blocking_reproduced_modes(
             and not _is_baseline_evidence(item, run_root, snapshot)
         ):
             continue
+        if item.oracle_origin == "requirement_derived_runtime":
+            valid_refs = {f"R{index}" for index in range(1, len(requirements) + 1)}
+            if (
+                spec.kind != "codex_agent"
+                or spec.isolation != "temporary-copy"
+                or item.kind not in {"runtime", "test", "trace", "state"}
+                or not observed_command
+                or not item.requirement_refs
+                or not set(item.requirement_refs).issubset(valid_refs)
+            ):
+                continue
         reproduced.extend(item.failure_modes)
     return tuple(dict.fromkeys(reproduced))
 
