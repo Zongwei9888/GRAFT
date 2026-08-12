@@ -30,7 +30,7 @@ stages do not read the evaluator implementation or output.
 
 ## Frozen method
 
-- GRAFT source commit: `692e75660f707711dbfaf8cbc8fd7d5f72c709ff`
+- GRAFT source commit: `692e756f029b1e0a9ca4cf911459dfef79381a22`
 - Codex CLI: `0.147.0`
 - Producer/modeler/planner/verifier model: `gpt-5.6-sol`
 - Producer reasoning effort: `high`

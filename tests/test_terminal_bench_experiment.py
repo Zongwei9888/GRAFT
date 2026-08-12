@@ -275,7 +275,7 @@ class TerminalBenchExperimentTests(unittest.TestCase):
             )
         self.assertEqual(
             graft["agents"][0]["kwargs"]["graft_commit"],
-            "692e75660f707711dbfaf8cbc8fd7d5f72c709ff",
+            "692e756f029b1e0a9ca4cf911459dfef79381a22",
         )
 
     def test_auth_ownership_fix_is_shared_by_native_and_treatment(self) -> None:
