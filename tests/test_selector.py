@@ -8,6 +8,7 @@ from graft.schema import (
     Behavior,
     FailureMode,
     FeedbackGraph,
+    PromotionRequirement,
     SharedBlindSpot,
     VerifierSpec,
     VerifierValueEstimate,
@@ -206,8 +207,6 @@ class ValueAwareSelectorTests(unittest.TestCase):
         self.assertGreater(selected.net_value, 0)
 
     def test_promotion_revalidation_is_required_even_when_discovery_value_is_low(self) -> None:
-        from graft.schema import PromotionRequirement
-
         promotion = PromotionRequirement("old", None, (), ("failure",), (), ())
         selected = ValueAwareSelector().select(
             self.value_graph(VerifierValueEstimate(), promotion=promotion),
@@ -215,6 +214,41 @@ class ValueAwareSelectorTests(unittest.TestCase):
             policy=self.policy(),
         )
         self.assertEqual(selected.verifier_ids, ("dynamic",))
+        self.assertFalse(selected.no_op)
+
+    def test_higher_value_discovery_singleton_cannot_replace_promotion(self) -> None:
+        promotion = PromotionRequirement("old", None, (), ("failure",), (), ())
+        base = self.value_graph(
+            VerifierValueEstimate(
+                actionability=0.1,
+                repair_success=0.1,
+                regression_risk=0,
+                producer_evidence_overlap=0,
+                confidence=1,
+                predicted_duration_s=1,
+            ),
+            promotion=promotion,
+        )
+        required = replace(base.verifiers[0], verifier_id="promotion")
+        discovery = replace(
+            base.verifiers[0],
+            verifier_id="discovery",
+            revalidates_feedback=False,
+            value_estimate=VerifierValueEstimate(
+                actionability=1,
+                repair_success=1,
+                regression_risk=0,
+                producer_evidence_overlap=0,
+                confidence=1,
+                predicted_duration_s=1,
+            ),
+        )
+        selected = ValueAwareSelector().select(
+            replace(base, verifiers=(required, discovery)),
+            budget=1,
+            policy=self.policy(max_verifiers=1),
+        )
+        self.assertEqual(selected.verifier_ids, ("promotion",))
         self.assertFalse(selected.no_op)
 
     def test_resource_infeasibility_is_not_reported_as_noop_value(self) -> None:

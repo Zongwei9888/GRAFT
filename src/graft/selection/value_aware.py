@@ -136,7 +136,10 @@ class ValueAwareSelector:
                 best_singleton_net = net
 
         greedy_net, _, _ = expected_net_value(graph, selected, budget, policy)
-        if best_singleton_net > greedy_net + 1e-12:
+        if (
+            graph.promotion is None
+            and best_singleton_net > greedy_net + 1e-12
+        ):
             selected = best_singleton
             marginal_values = {
                 best_singleton[0].verifier_id: best_singleton_net
