@@ -85,6 +85,24 @@ class CodexReviewerTests(unittest.TestCase):
             & _command_fingerprints(("bash", "-lc", "python3 -c 'print(2)'"))
         )
 
+    def test_shell_wrapped_simple_command_matches_reported_inner_argv(self) -> None:
+        script = "import sys; print(repr(sys.stdin.buffer.read()))"
+        inner = ("python3", "-c", script)
+        payload = " ".join(shlex.quote(part) for part in inner)
+        observed = "/bin/zsh -lc " + shlex.quote(payload)
+        self.assertTrue(
+            _command_fingerprints(inner) & _command_fingerprints(observed)
+        )
+
+    def test_compound_shell_command_does_not_promote_inner_command(self) -> None:
+        script = "print('claimed')"
+        inner = ("python3", "-c", script)
+        payload = "echo setup && " + " ".join(shlex.quote(part) for part in inner)
+        observed = "/bin/zsh -lc " + shlex.quote(payload)
+        self.assertFalse(
+            _command_fingerprints(inner) & _command_fingerprints(observed)
+        )
+
     def test_fresh_reviewer_is_parsed_and_does_not_mutate_producer(self) -> None:
         fixture = Path(__file__).parent / "fixtures" / "fake_codex.py"
         runner = CliCodexRunner((sys.executable, str(fixture)))

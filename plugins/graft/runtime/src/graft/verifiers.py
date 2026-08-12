@@ -608,7 +608,9 @@ def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> frozenset[str]:
     return frozenset(result)
 
 
-def _command_fingerprints(command: tuple[str, ...] | str) -> frozenset[str]:
+def _command_fingerprints(
+    command: tuple[str, ...] | str, *, _unwrap_depth: int = 0
+) -> frozenset[str]:
     """Canonicalize executed and reported commands without substring matching.
 
     Codex events commonly serialize ``/bin/bash -lc '...'`` as one string,
@@ -639,8 +641,44 @@ def _command_fingerprints(command: tuple[str, ...] | str) -> frozenset[str]:
                 if index + 1 < len(parts):
                     payload = " ".join(parts[index + 1].split())
                     fingerprints.add(f"shell:{executable}:{payload}")
+                    # Codex command events wrap ordinary commands in the configured
+                    # login shell, while structured verifier evidence may report the
+                    # exact inner argv. Recognize that representation only for one
+                    # simple command. Compound shell programs are deliberately not
+                    # unwrapped because observing one branch or pipeline is not proof
+                    # that a separately reported inner command executed as claimed.
+                    if _unwrap_depth < 2:
+                        inner = _simple_shell_argv(parts[index + 1])
+                        if inner is not None:
+                            fingerprints.update(
+                                _command_fingerprints(
+                                    inner, _unwrap_depth=_unwrap_depth + 1
+                                )
+                            )
                 break
     return frozenset(fingerprints)
+
+
+def _simple_shell_argv(payload: str) -> tuple[str, ...] | None:
+    try:
+        lexer = shlex.shlex(
+            payload,
+            posix=True,
+            punctuation_chars="();<>|&",
+        )
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        parts = tuple(lexer)
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    shell_control = frozenset("();<>|&")
+    if any(token and set(token) <= shell_control for token in parts):
+        return None
+    if any("`" in token or "$(" in token for token in parts):
+        return None
+    return parts
 
 
 def _normalize_command(command: tuple[str, ...]) -> str:
