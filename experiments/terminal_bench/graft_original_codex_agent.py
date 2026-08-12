@@ -68,7 +68,7 @@ class GraftOriginalCodex(NativeCodex):
                 f"{shlex.quote(self.GRAFT_REPOSITORY.removesuffix('.git') + '/archive/' + self.graft_commit + '.tar.gz')} && "
                 f"tar -xzf \"$archive\" --strip-components=1 -C "
                 f"{shlex.quote(self.GRAFT_SOURCE)} && "
-                f"test -f {shlex.quote(self.GRAFT_SOURCE + '/.codex-plugin/plugin.json')} && "
+                f"test -f {shlex.quote(self.GRAFT_SOURCE + '/plugins/graft/.codex-plugin/plugin.json')} && "
                 f"printf '%s\\n' {shlex.quote(self.graft_commit)} > "
                 f"{shlex.quote(self.GRAFT_SOURCE_MARKER)} && "
                 "rm -f \"$archive\""

@@ -230,6 +230,7 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertIn("/profiles", source)
         self.assertIn("/archive/", source)
         self.assertIn("--strip-components=1", source)
+        self.assertIn("/plugins/graft/.codex-plugin/plugin.json", source)
         self.assertIn("GRAFT_SOURCE_MARKER", source)
         self.assertNotIn("apt-get install -y git", source)
         self.assertIn("graft-original-default", source)
