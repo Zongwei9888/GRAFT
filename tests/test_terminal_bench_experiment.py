@@ -234,6 +234,20 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertNotIn("terminal-bench/html-js-filter", source)
         self.assertNotIn("test_outputs.py", source)
 
+    def test_value_aware_adapter_uses_only_an_external_domain_neutral_profile(self) -> None:
+        source = (
+            EXPERIMENT_ROOT / "graft_value_aware_codex_agent.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('return "graft-value-aware-codex"', source)
+        self.assertIn("--selection-policy value-aware", source)
+        self.assertIn("--path-regex", source)
+        self.assertIn("^/app$", source)
+        self.assertIn("graft-value-aware", source)
+        self.assertNotIn("terminal-bench/", source)
+        self.assertNotIn("test_outputs.py", source)
+        self.assertNotIn("hidden", source.lower())
+        self.assertNotIn("/app/.graft", source)
+
     def test_auth_ownership_fix_is_shared_by_native_and_treatment(self) -> None:
         native_source = (EXPERIMENT_ROOT / "graft_codex_agent.py").read_text(
             encoding="utf-8"
