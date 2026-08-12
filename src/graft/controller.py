@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Mapping
 
+from graft.cost_history import HistoricalCostEstimate
 from graft.evidence.snapshot import freeze_source
 from graft.modeling import (
     CodexFeedbackGraphBuilder,
@@ -18,18 +19,25 @@ from graft.schema import (
     Decision,
     DecisionKind,
     FeedbackGraph,
+    ProducerEvidenceSummary,
+    PromotionOutcome,
+    PromotionRequirement,
     Selection,
     SourceSnapshot,
     Verdict,
     VerifierResult,
     to_jsonable,
 )
-from graft.selection import InvalidFeedbackGraph, OriginalHypergraphSelector
+from graft.selection import (
+    InvalidFeedbackGraph,
+    OriginalHypergraphSelector,
+    ValueAwareSelector,
+)
 from graft.verifiers import VerifierExecutor
 
 
 class GraftController:
-    """Run the frozen GRAFT Original method at one observable checkpoint."""
+    """Run one configured GRAFT method at an observable source checkpoint."""
 
     def __init__(
         self,
@@ -37,14 +45,18 @@ class GraftController:
         *,
         config_path: Path,
         graph_builder: FeedbackGraphBuilder | None = None,
-        selector: OriginalHypergraphSelector | None = None,
+        selector: OriginalHypergraphSelector | ValueAwareSelector | None = None,
         executor: VerifierExecutor | None = None,
         report_root: Path | None = None,
     ) -> None:
         self.config = config
         self.config_path = config_path.resolve()
         self.graph_builder = graph_builder or CodexFeedbackGraphBuilder()
-        self.selector = selector or OriginalHypergraphSelector()
+        self.selector = selector or (
+            ValueAwareSelector()
+            if config.selection.strategy == "value-aware"
+            else OriginalHypergraphSelector()
+        )
         self.executor = executor or VerifierExecutor()
         self.report_root = report_root.resolve() if report_root else None
 
@@ -86,6 +98,12 @@ class GraftController:
         requirements: tuple[str, ...] = (),
         session_id: str = "manual",
         snapshot: SourceSnapshot | None = None,
+        producer_evidence: ProducerEvidenceSummary | None = None,
+        available_budget: float | None = None,
+        promotion: PromotionRequirement | None = None,
+        historical_costs: Mapping[str, HistoricalCostEstimate] | None = None,
+        available_wall_time_s: float | None = None,
+        available_model_cost_usd: float | None = None,
     ) -> Decision:
         source = snapshot or self.snapshot(repo, requirements)
         if not self.config.enabled:
@@ -102,7 +120,7 @@ class GraftController:
                 Decision(
                     kind=DecisionKind.UNRESOLVED,
                     reason=(
-                        "No raw user requirements were captured. GRAFT Original does not "
+                        "No raw user requirements were captured. GRAFT does not "
                         "invent a task specification or use the producer's summary as a substitute."
                     ),
                     snapshot=source,
@@ -111,12 +129,22 @@ class GraftController:
             )
 
         try:
-            graph = self.graph_builder.build(
-                source,
-                requirements,
-                self.config,
-                config_path=self.config_path,
-            )
+            if self.config.selection.strategy == "value-aware":
+                graph = self.graph_builder.build(
+                    source,
+                    requirements,
+                    self.config,
+                    config_path=self.config_path,
+                    producer_evidence=producer_evidence,
+                    promotion=promotion,
+                )
+            else:
+                graph = self.graph_builder.build(
+                    source,
+                    requirements,
+                    self.config,
+                    config_path=self.config_path,
+                )
         except (FeedbackGraphBuildError, ValueError) as exc:
             return self._finish(
                 Decision(
@@ -136,13 +164,46 @@ class GraftController:
                 ),
                 session_id,
             )
+        if self.config.selection.strategy == "value-aware" and historical_costs:
+            graph = _apply_historical_costs(graph, historical_costs)
 
         try:
-            selection = self.selector.select(
-                graph,
-                budget=self.config.budget,
-                policy=self.config.selection,
+            selection_budget = (
+                self.config.budget
+                if available_budget is None
+                else max(0.0, available_budget)
             )
+            if self.config.selection.strategy == "value-aware":
+                graph_stage_wall = sum(item.duration_s for item in graph.stage_costs)
+                graph_stage_model_cost = sum(
+                    item.estimated_cost_usd
+                    for item in graph.stage_costs
+                    if item.estimated_cost_usd is not None
+                )
+                selection = self.selector.select(
+                    graph,
+                    budget=selection_budget,
+                    policy=self.config.selection,
+                    available_wall_time_s=(
+                        None
+                        if available_wall_time_s is None
+                        else max(0.0, available_wall_time_s - graph_stage_wall)
+                    ),
+                    available_model_cost_usd=(
+                        None
+                        if available_model_cost_usd is None
+                        else max(
+                            0.0,
+                            available_model_cost_usd - graph_stage_model_cost,
+                        )
+                    ),
+                )
+            else:
+                selection = self.selector.select(
+                    graph,
+                    budget=selection_budget,
+                    policy=self.config.selection,
+                )
         except InvalidFeedbackGraph as exc:
             return self._finish(
                 Decision(
@@ -154,6 +215,34 @@ class GraftController:
                 session_id,
             )
         if not selection.verifier_ids:
+            if selection.no_op and self.config.selection.strategy == "value-aware":
+                return self._finish(
+                    Decision(
+                        kind=DecisionKind.ALLOW,
+                        reason=(
+                            "GRAFT selected No-Op because no verifier had positive conservative "
+                            "marginal net value over the producer evidence and execution cost."
+                        ),
+                        snapshot=source,
+                        graph=graph,
+                        selection=selection,
+                    ),
+                    session_id,
+                )
+            if graph.promotion is not None:
+                return self._finish(
+                    Decision(
+                        kind=DecisionKind.UNRESOLVED,
+                        reason=(
+                            "The repaired candidate requires prior-feedback revalidation, but no "
+                            "eligible promotion verifier fits the remaining task-epoch budget."
+                        ),
+                        snapshot=source,
+                        graph=graph,
+                        selection=selection,
+                    ),
+                    session_id,
+                )
             return self._finish(
                 Decision(
                     kind=DecisionKind.UNRESOLVED,
@@ -238,6 +327,7 @@ class GraftController:
         selection: Selection,
         results: tuple[VerifierResult, ...],
     ) -> Decision:
+        promotion_outcome = _assess_promotion(graph, results)
         blocking = tuple(
             result
             for result in results
@@ -294,8 +384,24 @@ class GraftController:
                 graph=graph,
                 selection=selection,
                 results=results,
+                promotion_outcome=promotion_outcome,
             )
 
+        if graph.promotion is not None:
+            if promotion_outcome != PromotionOutcome.FIXED_AND_PRESERVED:
+                return Decision(
+                    kind=DecisionKind.UNRESOLVED,
+                    reason=(
+                        "The repaired checkpoint was not promoted: no required revalidation "
+                        "verifier produced executed eligible evidence that the prior finding is "
+                        "fixed while required behavior remains preserved."
+                    ),
+                    snapshot=source,
+                    graph=graph,
+                    selection=selection,
+                    results=results,
+                    promotion_outcome=promotion_outcome,
+                )
         errors = tuple(result for result in results if result.verdict == Verdict.ERROR)
         suspicions = tuple(
             result
@@ -332,6 +438,7 @@ class GraftController:
                 graph=graph,
                 selection=selection,
                 results=results,
+                promotion_outcome=promotion_outcome,
             )
 
         if selection.residual_risk > self.config.selection.residual_risk_threshold:
@@ -345,6 +452,7 @@ class GraftController:
                 graph=graph,
                 selection=selection,
                 results=results,
+                promotion_outcome=promotion_outcome,
             )
 
         return Decision(
@@ -357,6 +465,7 @@ class GraftController:
             graph=graph,
             selection=selection,
             results=results,
+            promotion_outcome=promotion_outcome,
         )
 
     def _finish(self, decision: Decision, session_id: str) -> Decision:
@@ -382,3 +491,57 @@ class GraftController:
             reason = completed.reason + f"\nFull report: {completed.report_path}"
             completed = replace(completed, reason=reason)
         return completed
+
+
+def _apply_historical_costs(
+    graph: FeedbackGraph,
+    historical_costs: Mapping[str, HistoricalCostEstimate],
+) -> FeedbackGraph:
+    calibrated = []
+    for verifier in graph.verifiers:
+        key = verifier.template_id or verifier.verifier_id
+        observed = historical_costs.get(key)
+        if observed is None:
+            calibrated.append(verifier)
+            continue
+        estimate = replace(
+            verifier.value_estimate,
+            predicted_duration_s=observed.duration_s,
+            predicted_model_cost_usd=(
+                observed.model_cost_usd
+                if observed.model_cost_usd is not None
+                else verifier.value_estimate.predicted_model_cost_usd
+            ),
+        )
+        calibrated.append(replace(verifier, value_estimate=estimate))
+    return replace(graph, verifiers=tuple(calibrated))
+
+
+def _assess_promotion(
+    graph: FeedbackGraph, results: tuple[VerifierResult, ...]
+) -> PromotionOutcome | None:
+    if graph.promotion is None:
+        return None
+    by_id = {item.verifier_id: item for item in graph.verifiers}
+    relevant = tuple(
+        result
+        for result in results
+        if by_id.get(result.verifier_id) is not None
+        and by_id[result.verifier_id].revalidates_feedback
+    )
+    if any(item.promotion_outcome == PromotionOutcome.REGRESSED for item in relevant):
+        return PromotionOutcome.REGRESSED
+    if any(
+        item.promotion_outcome == PromotionOutcome.NOT_FIXED
+        or (item.verdict == Verdict.FAIL and item.reproducible)
+        for item in relevant
+    ):
+        return PromotionOutcome.NOT_FIXED
+    if any(
+        item.promotion_outcome == PromotionOutcome.FIXED_AND_PRESERVED
+        and item.verdict == Verdict.PASS
+        and item.executed_evidence
+        for item in relevant
+    ):
+        return PromotionOutcome.FIXED_AND_PRESERVED
+    return PromotionOutcome.UNRESOLVED

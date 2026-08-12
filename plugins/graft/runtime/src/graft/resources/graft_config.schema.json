@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "GRAFT Original configuration v2",
+  "title": "GRAFT configuration v2",
   "type": "object",
   "required": [
     "version",
@@ -16,7 +16,7 @@
   ],
   "properties": {
     "version": {"const": 2},
-    "method": {"const": "graft-original"},
+    "method": {"type": "string", "enum": ["graft-original", "graft-value-aware"]},
     "enabled": {"type": "boolean"},
     "budget": {"type": "number", "minimum": 0},
     "checkpoint_mode": {
@@ -31,7 +31,8 @@
       "required": ["behavior_modeler", "verifier_planner"],
       "properties": {
         "behavior_modeler": {"$ref": "#/$defs/modelStage"},
-        "verifier_planner": {"$ref": "#/$defs/modelStage"}
+        "verifier_planner": {"$ref": "#/$defs/modelStage"},
+        "completion_gate": {"$ref": "#/$defs/completionGate"}
       },
       "additionalProperties": false
     },
@@ -48,10 +49,23 @@
         "residual_risk_threshold"
       ],
       "properties": {
-        "algorithm": {"const": "lazy-greedy-hypergraph"},
+        "strategy": {"type": "string", "enum": ["original", "value-aware"]},
+        "algorithm": {
+          "type": "string",
+          "enum": ["lazy-greedy-hypergraph", "value-aware-hypergraph"]
+        },
         "max_verifiers": {"type": "integer", "minimum": 1},
         "min_marginal_gain_per_cost": {"type": "number", "minimum": 0},
-        "residual_risk_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+        "residual_risk_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_net_value": {"type": "number", "minimum": 0},
+        "uncertainty_penalty": {"type": "number", "minimum": 0},
+        "repair_value": {"type": "number", "minimum": 0},
+        "regression_cost": {"type": "number", "minimum": 0},
+        "wall_time_budget_s": {"type": "number", "exclusiveMinimum": 0},
+        "model_cost_budget_usd": {"type": "number", "exclusiveMinimum": 0},
+        "wall_time_weight": {"type": "number", "minimum": 0},
+        "model_cost_weight": {"type": "number", "minimum": 0},
+        "nominal_cost_weight": {"type": "number", "minimum": 0}
       },
       "additionalProperties": false
     },
@@ -66,6 +80,17 @@
         "model": {"type": ["string", "null"]},
         "timeout_s": {"type": "number", "exclusiveMinimum": 0},
         "prompt_family": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "completionGate": {
+      "type": "object",
+      "required": ["model", "timeout_s", "prompt_family", "min_confidence"],
+      "properties": {
+        "model": {"type": ["string", "null"]},
+        "timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "prompt_family": {"type": "string", "minLength": 1},
+        "min_confidence": {"type": "number", "minimum": 0, "maximum": 1}
       },
       "additionalProperties": false
     },

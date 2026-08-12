@@ -1,9 +1,9 @@
 ---
 name: graft-verification
-description: Inspect, configure, enable, disable, or explain the GRAFT Original verification governor for Codex. Use when the user asks about GRAFT status, dynamic verifier construction, checkpoint evidence, reports, or project policy. Lifecycle hooks run automatically during ordinary coding tasks.
+description: Inspect, configure, enable, disable, or explain the GRAFT verification governor for Codex, including the frozen Original baseline and opt-in value-aware policy. Use when the user asks about GRAFT status, dynamic verifier construction, checkpoint evidence, reports, or project policy. Lifecycle hooks run automatically during ordinary coding tasks.
 ---
 
-# GRAFT Original Verification Governor
+# GRAFT Verification Governor
 
 GRAFT is an external evidence gate, not Codex's planner. On a changed Stop checkpoint, isolated
 structured model calls derive task-specific Behaviors, Failure Modes, verifier objectives, and
@@ -25,6 +25,7 @@ asks for a versioned project override of budgets, models, policies, or general v
 
 ```bash
 python3 <plugin-root>/scripts/graft_plugin.py cli init --repo .
+python3 <plugin-root>/scripts/graft_plugin.py cli init --repo . --selection-policy value-aware
 ```
 
 During an ordinary coding task, never run `cli verify` in response to GRAFT continuation
@@ -45,6 +46,8 @@ python3 <plugin-root>/scripts/graft_plugin.py cli config untrust --repo .
 Interpretation:
 
 - `graft-original-default`: domain-neutral runtime modeling and dynamic verifier retrieval;
+- `graft-value-aware`: explicit research opt-in with completion gating, No-Op, semantic producer
+  evidence, observed costs, task-epoch budgets, and post-feedback promotion;
 - `project`: reviewed v2 project policy bound to an exact hash;
 - `profile:*`: a matching reviewed user policy;
 - `allow`: selected task-specific evidence passed within the residual-risk threshold;

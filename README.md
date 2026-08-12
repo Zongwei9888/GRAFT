@@ -1,10 +1,10 @@
 # GRAFT
 
 GRAFT is an external verification governor for Codex. It leaves the producer Codex loop free to
-search, edit, test, and repair. When Codex reaches a changed Stop boundary, GRAFT asks a fresh
-structured model to derive the current task's Behaviors and Failure Modes, asks another fresh model
-to instantiate a heterogeneous verifier registry, selects complementary evidence under a budget,
-and runs the selected verifiers.
+search, edit, test, and repair. The frozen `graft-original` method remains the reproducible
+baseline. The opt-in `graft-value-aware` policy adds an LLM completion gate, producer-evidence-aware
+retrieval, an explicit No-Op alternative, observed cost calibration, task-epoch budgets, and
+post-feedback promotion checks. Neither policy modifies Codex itself.
 
 The original research method is frozen in
 [`docs/method-original-frozen.md`](docs/method-original-frozen.md). The DOCX named there remains the
@@ -13,6 +13,41 @@ participate, what counts as hardcoding, and why a changed `Stop` is not by itsel
 recorded in [`docs/graft-core-definition-zh.md`](docs/graft-core-definition-zh.md). The staged,
 gate-driven correction plan is in
 [`docs/graft-optimization-plan-zh.md`](docs/graft-optimization-plan-zh.md).
+
+## Unreleased value-aware policy
+
+The correction plan is now implemented behind an explicit project policy:
+
+```bash
+graft init --selection-policy value-aware
+graft config trust
+```
+
+It is intentionally not the built-in default. Its lifecycle is:
+
+```text
+changed Stop
+    → isolated LLM lifecycle classification
+        → non-completion: No-Op
+        → delivery candidate:
+            LLM task/failure model + LLM verifier planning
+            → compare conservative marginal net value with No-Op = 0
+                → No-Op, or execute selected evidence
+                    → reproducible finding: same Codex session repairs
+                    → repaired checkpoint: executed promotion revalidation
+```
+
+`PostToolUse` records bounded, redacted semantic evidence so the planner can avoid buying a second
+copy of evidence Codex already produced. Verifier costs use a conservative quantile of observed
+template history when available and LLM predictions only during cold start. Unknown usage remains
+explicitly unknown. Selection reports can be replayed without executing verifiers:
+
+```bash
+graft replay-selection --report REPORT.json --config VALUE_AWARE_CONFIG.json
+```
+
+These are implemented research mechanisms, not evidence that the policy improves Codex. The M1–M3
+evaluation gates in the optimization plan have not yet passed.
 
 ## What changed in 0.5
 
@@ -92,7 +127,8 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
 ## How one checkpoint works
 
 1. `UserPromptSubmit` maintains ordered raw user requirements across the current task epoch.
-2. `PostToolUse` stores hashes of tool facts; private Codex transcripts are not parsed.
+2. `PostToolUse` stores hashes plus bounded, redacted semantic facts; private Codex transcripts are
+   not parsed.
 3. `Stop` freezes the current source state. A producer message such as “done” is not treated as
    evidence and is not classified by task-specific keywords.
 4. A read-only ephemeral model call builds Behaviors and Failure Modes from requirements,
@@ -114,6 +150,13 @@ See [installation](docs/installation.md), [configuration](docs/configuration.md)
    producer Codex session. Generated mocks, substitute implementations, candidate-authored
    contracts, source-review suspicions, errors, abstentions, and capability gaps do not become
    blocking evidence.
+
+Those eight steps describe the frozen Original baseline. With `value-aware`, the completion gate
+runs first, producer evidence is supplied to both LLM modeling stages, and the selector discounts
+overlapping evidence, uncertainty, predicted repair regression, wall time, and model cost. No-Op
+has utility zero and wins whenever every conservative marginal value is non-positive or exceeds a
+remaining task-epoch resource budget. After feedback, a fresh executable verifier must classify the
+candidate as `fixed_and_preserved`; `not_fixed`, `regressed`, and `unresolved` cannot be promoted.
 
 Reports and bounded immutable task-start text archives are source-bound and stored outside arbitrary target
 repositories in the platform's GRAFT state directory. The original producer workspace is checked
@@ -158,6 +201,11 @@ the online selector. The first three profile-free dynamic Terminal-Bench 3 pairs
 positive effectiveness result; see the
 [recorded results](experiments/terminal_bench/RESULTS.md). The implementation is therefore a
 research prototype, not an established quality improvement.
+
+The value-aware implementation is also uncalibrated. Its fixed numbers are protocol
+hyperparameters, not task rules, and must be tuned only on held-out development data. No language,
+framework, repository type, game mechanic, benchmark identity, or hidden answer is routed in
+production code.
 
 Claims suitable for WSDM 2027 still require paired multi-task evaluation, calibration studies,
 lineage ablations, budget curves, and comparison with native Codex, fixed checklists, single

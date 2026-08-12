@@ -1,12 +1,25 @@
 # GRAFT 反效果问题整理与优化计划
 
-状态：**优化计划 v1，尚未实现**  
+状态：**优化计划 v1；代码候选已实现，M1–M3 效果 Gate 尚未通过**
 日期：2026-08-12  
 依据：冻结原稿、当前产品代码、Terminal-Bench 因果 checkpoint replay 与
 `experiments/terminal_bench/ADVERSE_EFFECT_AUDIT.md`
 
 本计划不修改 `GRAFT Original` 的身份。现有算法和处理固定为实验 baseline；所有优化进入独立的
 `value-aware` 策略，只有通过预注册 Gate 后才能成为默认产品策略或论文主方法。
+
+截至 2026-08-12，Phase 0–3 的产品代码和离线 selection replay 入口已经实现，但这不等于
+研究假设成立。当前冻结状态如下：
+
+| 项目 | 实现状态 | 证据状态 |
+|---|---|---|
+| Original baseline 隔离 | 完成；默认仍是 `graft-original` | 100 tests 与 release check 已通过 |
+| 语义 evidence / stage cost | 完成 | 覆盖率 M0 实验统计未完成 |
+| LLM completion gate | 完成；只判断生命周期 | M1 标注集尚未建立 |
+| Value-aware + No-Op | 完成；显式 opt-in | M2 校准与 baseline replay 尚未通过 |
+| task-epoch 三类预算 | 完成；未知费用显式记录 | 预算参数尚未校准 |
+| feedback promotion guard | 完成；四态结果 | M3 历史回归 replay 尚未通过 |
+| shared-prefix benchmark | 未开始 | 必须等待 M1–M3 |
 
 ## 1. 当前结论
 
@@ -106,8 +119,8 @@ Stop
 
 实现：
 
-- 新增有界 `ProducerEvidenceRecord`：tool family、规范化命令类别、目标、退出码、测试计数、
-  修改文件、持续时间与结果摘要；
+- 新增有界 `ProducerEvidenceRecord`：tool family、命令/结果预览、退出码、修改路径、持续时间
+  与结果状态；不推断语言或测试框架类别；
 - 保留原始 payload hash 用于完整性，但不再把 hash 当成语义；
 - 对敏感值做截断/脱敏，不解析不稳定的私有 transcript；
 - 为 task modeler 和 selector 提供聚合 evidence summary；
@@ -285,7 +298,7 @@ Gate E：
 | 3 | 把 evidence summary 注入 task modeler/planner | structured prompt 与 snapshot 测试 |
 | 4 | 增加 completion gate 接口和 LLM 实现 | gate report、abstain/No-Op 状态 |
 | 5 | 把 Original selector 命名并冻结 | policy version 与回归 fixture |
-| 6 | 实现实际成本模型、No-Op 和 `ValueAwareSelector` | 离线 replay CLI |
+| 6 | 实现实际成本模型、No-Op 和 `ValueAwareSelector` | `graft replay-selection` |
 | 7 | 加入 task-epoch budget 与 candidate promotion | pre/post evidence report |
 | 8 | 同步 plugin runtime、文档和安装包 | plugin/source parity tests |
 | 9 | 运行 M0–M3，不通过则修测量层而不碰新任务 | Gate 报告 |
@@ -301,4 +314,5 @@ Gate E：
 - 每项实验结论必须标记为 confirmed、supported hypothesis 或 untested；
 - 每个策略报告 `method_version`、`selection_policy`、commit 和 config hash；
 - 任何新增 task-specific rule 都视为违反计划并阻止 release；
+- 固定的 enum、schema、安全边界和未校准超参数属于方法协议，不得冒充任务语义；
 - 计划变更必须新增版本和理由，不能覆盖旧结论。

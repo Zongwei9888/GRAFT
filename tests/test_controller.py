@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from graft.controller import GraftController
@@ -13,6 +14,9 @@ from graft.schema import (
     EvidenceItem,
     FailureMode,
     FeedbackGraph,
+    PromotionRequirement,
+    PromotionOutcome,
+    Selection,
     Verdict,
     VerifierResult,
     VerifierSpec,
@@ -189,6 +193,80 @@ class ControllerTests(unittest.TestCase):
             decision = controller.verify(root, requirements=("keep value correct",))
             self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
             self.assertIn("different checkpoint", decision.reason)
+
+    def test_promotion_guard_requires_executed_pass_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            path = initialize_project(root).path
+            controller = GraftController(load_config(path), config_path=path)
+            source = controller.snapshot(root, ("keep value correct",))
+            base = feedback_graph(source.checkpoint_key)
+            spec = replace(base.verifiers[0], revalidates_feedback=True)
+            promotion = PromotionRequirement(
+                "old-checkpoint",
+                None,
+                ("the requested value is correct",),
+                ("the value violates the request",),
+                ("observed mismatch",),
+                (("check-value",),),
+            )
+            graph = FeedbackGraph(
+                source_hash=base.source_hash,
+                behaviors=base.behaviors,
+                failure_modes=base.failure_modes,
+                verifiers=(spec,),
+                shared_blind_spots=(),
+                promotion=promotion,
+            )
+            selection = Selection((spec.verifier_id,), 1, 1, 0, 1, True, 1)
+            unexecuted = VerifierResult(
+                verifier_id=spec.verifier_id,
+                verdict=Verdict.PASS,
+                summary="claimed fixed",
+                source_hash=source.checkpoint_key,
+                blocking=True,
+                reproducible=False,
+                duration_s=0.1,
+                executed_evidence=False,
+            )
+            decision = controller._decide(source, graph, selection, (unexecuted,))
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIn("not promoted", decision.reason)
+
+            executed = VerifierResult(
+                verifier_id=spec.verifier_id,
+                verdict=Verdict.PASS,
+                summary="reproduction now passes",
+                source_hash=source.checkpoint_key,
+                blocking=True,
+                reproducible=False,
+                duration_s=0.1,
+                executed_evidence=True,
+                promotion_outcome=PromotionOutcome.FIXED_AND_PRESERVED,
+            )
+            promoted = controller._decide(source, graph, selection, (executed,))
+            self.assertEqual(promoted.kind, DecisionKind.ALLOW)
+            self.assertEqual(
+                promoted.promotion_outcome,
+                PromotionOutcome.FIXED_AND_PRESERVED,
+            )
+
+            regressed = VerifierResult(
+                verifier_id=spec.verifier_id,
+                verdict=Verdict.FAIL,
+                summary="repair violated a preserved behavior",
+                source_hash=source.checkpoint_key,
+                blocking=True,
+                reproducible=True,
+                duration_s=0.1,
+                failure_modes=("f1",),
+                executed_evidence=True,
+                promotion_outcome=PromotionOutcome.REGRESSED,
+            )
+            rejected = controller._decide(source, graph, selection, (regressed,))
+            self.assertEqual(rejected.kind, DecisionKind.CONTINUE_WITH_EVIDENCE)
+            self.assertEqual(rejected.promotion_outcome, PromotionOutcome.REGRESSED)
 
 
 if __name__ == "__main__":

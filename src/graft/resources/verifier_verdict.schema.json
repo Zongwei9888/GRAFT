@@ -48,7 +48,11 @@
       }
     },
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "reproducible": {"type": "boolean"}
+    "reproducible": {"type": "boolean"},
+    "promotion_outcome": {
+      "type": ["string", "null"],
+      "enum": ["fixed_and_preserved", "not_fixed", "regressed", "unresolved", null]
+    }
   },
   "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible"],
   "additionalProperties": false

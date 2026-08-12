@@ -9,13 +9,16 @@ from graft.evidence.snapshot import freeze_source
 from graft.modeling import CodexFeedbackGraphBuilder, FeedbackGraphBuildError
 from graft.project_config import initialize_project
 from graft.registry import load_config
-from graft.schema import TurnResult
+from graft.schema import ProducerEvidenceSummary, TurnResult
 
 
 class StructuredRunner:
-    def __init__(self, *, duplicate_candidate: bool = False) -> None:
+    def __init__(
+        self, *, duplicate_candidate: bool = False, value_aware: bool = False
+    ) -> None:
         self.calls = []
         self.duplicate_candidate = duplicate_candidate
+        self.value_aware = value_aware
 
     def start_thread(self, prompt, repo, config):
         self.calls.append((prompt, repo, config))
@@ -61,6 +64,17 @@ class StructuredRunner:
                         "oracle": "observed rendered output",
                 }
             ]
+            if self.value_aware:
+                candidates[0]["value_estimate"] = {
+                    "actionability": 0.8,
+                    "repair_success": 0.7,
+                    "regression_risk": 0.1,
+                    "producer_evidence_overlap": 0.2,
+                    "confidence": 0.75,
+                    "predicted_duration_s": 20,
+                    "predicted_model_cost_usd": 0.1,
+                }
+                candidates[0]["revalidates_feedback"] = False
             if self.duplicate_candidate:
                 candidates.append({**candidates[0], "id": "visual-runtime-probe-2"})
             response = {
@@ -113,6 +127,7 @@ class ModelingTests(unittest.TestCase):
                 self.assertTrue(run_config.skip_git_repo_check)
             self.assertIn("candidate-modified files", runner.calls[0][0])
             self.assertIn("must never introduce a new", runner.calls[0][0])
+            self.assertEqual(len(graph.stage_costs), 2)
 
     def test_shared_lineage_without_a_blind_spot_model_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -138,6 +153,43 @@ class ModelingTests(unittest.TestCase):
                     config,
                     config_path=config_path,
                 )
+
+    def test_value_aware_modeling_receives_producer_evidence_and_value_estimates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.bin").write_bytes(b"candidate")
+            config_path = initialize_project(
+                root, selection_policy="value-aware"
+            ).path
+            config = load_config(config_path)
+            requirement = "Render the requested scene"
+            snapshot = freeze_source(
+                root,
+                requirements=(requirement,),
+                config_path=config_path,
+                environment_fingerprint=config.environment_fingerprint,
+            )
+            evidence = ProducerEvidenceSummary(
+                1,
+                1,
+                1,
+                0,
+                0,
+                0.5,
+                command_previews=("./existing-check",),
+            )
+            runner = StructuredRunner(value_aware=True)
+            graph = CodexFeedbackGraphBuilder(codex_runner=runner).build(
+                snapshot,
+                (requirement,),
+                config,
+                config_path=config_path,
+                producer_evidence=evidence,
+            )
+            self.assertEqual(graph.producer_evidence, evidence)
+            self.assertEqual(graph.verifiers[0].value_estimate.actionability, 0.8)
+            self.assertIn("./existing-check", runner.calls[0][0])
+            self.assertIn("overlap with producer evidence", runner.calls[1][0])
 
 
 if __name__ == "__main__":

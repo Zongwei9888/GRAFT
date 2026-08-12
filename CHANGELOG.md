@@ -4,6 +4,15 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- preserve the frozen Original path while adding an explicit `graft-value-aware` policy;
+- classify lifecycle completion with an isolated structured LLM before expensive verification;
+- record bounded redacted producer evidence and supply it to task modeling and verifier planning;
+- compare conservative marginal net value against an explicit No-Op alternative;
+- measure stage usage without converting unknown cost to zero, learn conservative verifier cost
+  profiles from content-free local history, and enforce task-epoch nominal/wall/model budgets;
+- require executed post-feedback revalidation and report `fixed_and_preserved`, `not_fixed`,
+  `regressed`, or `unresolved` promotion outcomes;
+- add offline `replay-selection` for selector evaluation without verifier or evaluator execution;
 - keep continuation re-verification inside the Stop hook so producer-side manual `cli verify`
   calls cannot bypass `max_feedback_rounds`;
 - give the dynamic behavior modeler 180 seconds of the existing 600-second Stop window after a

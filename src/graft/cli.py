@@ -24,6 +24,7 @@ from graft.controller import GraftController
 from graft.evidence.snapshot import freeze_source
 from graft.project_config import initialize_project, set_project_enabled
 from graft.registry import load_config
+from graft.replay import replay_selection
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
 from graft.schema import DecisionKind, RunConfig, to_jsonable
 from graft.user_profiles import create_profile, list_profiles
@@ -44,6 +45,14 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--config", type=Path)
     verify.add_argument("--requirement", action="append", default=[])
     verify.add_argument("--session-id", default="manual")
+
+    replay = subparsers.add_parser(
+        "replay-selection",
+        help="Replay a selector over an existing report without executing verifiers",
+    )
+    replay.add_argument("--report", type=Path, required=True)
+    replay.add_argument("--config", type=Path, required=True)
+    replay.add_argument("--budget", type=float)
 
     codex_run = subparsers.add_parser(
         "codex-run", help="Run or continue a Codex thread with JSONL capture"
@@ -81,13 +90,19 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--codex-home", type=Path)
 
     initialize = subparsers.add_parser(
-        "init", help="Create a domain-neutral GRAFT Original project override"
+        "init", help="Create a domain-neutral GRAFT project override"
     )
     initialize.add_argument("--repo", type=Path, default=Path.cwd())
     initialize.add_argument(
         "--checkpoint-mode",
         choices=("completion", "strict", "explicit"),
         default="completion",
+    )
+    initialize.add_argument(
+        "--selection-policy",
+        choices=("original", "value-aware"),
+        default="original",
+        help="Keep the frozen Original baseline or opt into the uncalibrated value-aware policy",
     )
     initialize.add_argument(
         "--verifier-network-access",
@@ -110,7 +125,7 @@ def _parser() -> argparse.ArgumentParser:
     for name, help_text in (
         ("show", "Print the resolved configuration"),
         ("validate", "Validate the resolved or explicitly supplied configuration"),
-        ("enable", "Enable GRAFT Original for this project"),
+        ("enable", "Enable GRAFT for this project"),
         ("disable", "Disable GRAFT for this project without uninstalling the plugin"),
         ("trust", "Trust the current project configuration hash after review"),
         ("untrust", "Revoke trust so project commands cannot run"),
@@ -193,6 +208,30 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(to_jsonable(decision), ensure_ascii=False, indent=2))
         return 1 if decision.kind == DecisionKind.CONTINUE_WITH_EVIDENCE else 0
 
+    if args.command == "replay-selection":
+        try:
+            config = load_config(args.config.resolve())
+            selection = replay_selection(
+                args.report.resolve(), config, budget=args.budget
+            )
+        except (OSError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {
+                    "report": str(args.report.resolve()),
+                    "config": str(args.config.resolve()),
+                    "method": config.method,
+                    "selection": to_jsonable(selection),
+                    "executed_verifiers": False,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
     if args.command == "codex-run":
         runner = CliCodexRunner()
         config = RunConfig(
@@ -249,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
             result = initialize_project(
                 workspace,
                 checkpoint_mode=args.checkpoint_mode,
+                selection_policy=args.selection_policy,
                 verifier_network_access=args.verifier_network_access,
                 force=args.force,
             )
@@ -283,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             item.template_id for item in config.verifier_templates
         ]
         payload["selection"] = {
+            "strategy": config.selection.strategy,
             "algorithm": config.selection.algorithm,
             "status": "constructed dynamically at each verification checkpoint",
         }

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from graft.runtime_paths import workspace_runtime_paths
+from graft.schema import PromotionRequirement, StageCost
 
 
 def prompt_hash(prompt: str) -> str:
@@ -37,6 +38,13 @@ class SessionState:
     last_feedback_hash: str | None = None
     pending_feedback_hash: str | None = None
     verification_round: int = 0
+    spent_budget: float = 0.0
+    spent_wall_time_s: float = 0.0
+    spent_model_cost_usd: float = 0.0
+    unknown_cost_stages: int = 0
+    stage_costs: list[StageCost] = field(default_factory=list)
+    pending_promotion: PromotionRequirement | None = None
+    promotion_status: str | None = None
     status: str = "active"
 
     @property
@@ -70,6 +78,45 @@ class SessionStateStore:
             last_feedback_hash=raw.get("last_feedback_hash"),
             pending_feedback_hash=raw.get("pending_feedback_hash"),
             verification_round=int(raw.get("verification_round", 0)),
+            spent_budget=float(raw.get("spent_budget", 0.0)),
+            spent_wall_time_s=float(raw.get("spent_wall_time_s", 0.0)),
+            spent_model_cost_usd=float(raw.get("spent_model_cost_usd", 0.0)),
+            unknown_cost_stages=int(raw.get("unknown_cost_stages", 0)),
+            stage_costs=[
+                StageCost(
+                    stage_id=str(item["stage_id"]),
+                    kind=str(item["kind"]),
+                    duration_s=float(item["duration_s"]),
+                    input_tokens=(
+                        int(item["input_tokens"])
+                        if item.get("input_tokens") is not None
+                        else None
+                    ),
+                    cached_input_tokens=(
+                        int(item["cached_input_tokens"])
+                        if item.get("cached_input_tokens") is not None
+                        else None
+                    ),
+                    output_tokens=(
+                        int(item["output_tokens"])
+                        if item.get("output_tokens") is not None
+                        else None
+                    ),
+                    estimated_cost_usd=(
+                        float(item["estimated_cost_usd"])
+                        if item.get("estimated_cost_usd") is not None
+                        else None
+                    ),
+                )
+                for item in raw.get("stage_costs", [])
+                if isinstance(item, dict)
+            ],
+            pending_promotion=_promotion_from_raw(raw.get("pending_promotion")),
+            promotion_status=(
+                str(raw["promotion_status"])
+                if raw.get("promotion_status") is not None
+                else None
+            ),
             status=str(raw.get("status", "active")),
         )
 
@@ -106,6 +153,13 @@ class SessionStateStore:
                 state.baseline_archive_path = None
                 state.last_verified_checkpoint_key = None
                 state.verification_round = 0
+                state.spent_budget = 0.0
+                state.spent_wall_time_s = 0.0
+                state.spent_model_cost_usd = 0.0
+                state.unknown_cost_stages = 0
+                state.stage_costs = []
+                state.pending_promotion = None
+                state.promotion_status = None
                 state.status = "active"
             if state.baseline_tree_hash is None:
                 state.baseline_tree_hash = current_tree_hash
@@ -122,3 +176,29 @@ class SessionStateStore:
 
 def session_state_to_dict(state: SessionState) -> dict[str, Any]:
     return asdict(state)
+
+
+def _promotion_from_raw(value: Any) -> PromotionRequirement | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        return PromotionRequirement(
+            feedback_checkpoint_key=str(value["feedback_checkpoint_key"]),
+            report_path=(str(value["report_path"]) if value.get("report_path") else None),
+            behavior_descriptions=tuple(
+                str(item) for item in value.get("behavior_descriptions", [])
+            ),
+            failure_descriptions=tuple(
+                str(item) for item in value.get("failure_descriptions", [])
+            ),
+            evidence_observations=tuple(
+                str(item) for item in value.get("evidence_observations", [])
+            ),
+            reproduction_commands=tuple(
+                tuple(str(part) for part in command)
+                for command in value.get("reproduction_commands", [])
+                if isinstance(command, list)
+            ),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None

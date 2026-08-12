@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from graft.registry import SelectionPolicy
 from graft.schema import (
@@ -9,8 +10,13 @@ from graft.schema import (
     FeedbackGraph,
     SharedBlindSpot,
     VerifierSpec,
+    VerifierValueEstimate,
 )
-from graft.selection import InvalidFeedbackGraph, OriginalHypergraphSelector
+from graft.selection import (
+    InvalidFeedbackGraph,
+    OriginalHypergraphSelector,
+    ValueAwareSelector,
+)
 
 
 def verifier(
@@ -104,6 +110,132 @@ class OriginalSelectorTests(unittest.TestCase):
                 budget=2,
                 policy=SelectionPolicy("lazy-greedy-hypergraph", 2, 0, 1),
             )
+
+
+class ValueAwareSelectorTests(unittest.TestCase):
+    @staticmethod
+    def policy(**overrides) -> SelectionPolicy:
+        values = {
+            "algorithm": "value-aware-hypergraph",
+            "max_verifiers": 2,
+            "min_marginal_gain_per_cost": 0,
+            "residual_risk_threshold": 1,
+            "strategy": "value-aware",
+            "min_net_value": 0,
+            "uncertainty_penalty": 0,
+            "repair_value": 1,
+            "regression_cost": 0,
+            "wall_time_weight": 0,
+            "model_cost_weight": 0,
+            "nominal_cost_weight": 0,
+        }
+        values.update(overrides)
+        return SelectionPolicy(**values)
+
+    @staticmethod
+    def value_graph(estimate: VerifierValueEstimate, *, promotion=None) -> FeedbackGraph:
+        candidate = verifier("dynamic", 0.9)
+        candidate = replace(
+            candidate,
+            value_estimate=estimate,
+            revalidates_feedback=promotion is not None,
+            isolation="temporary-copy" if promotion is not None else "ephemeral",
+        )
+        return FeedbackGraph(
+            source_hash="checkpoint",
+            behaviors=(Behavior("b", "required", (), ("result",), 1, 1, 0),),
+            failure_modes=(FailureMode("f", "b", "fails", "dynamic", (), (), 1),),
+            verifiers=(candidate,),
+            shared_blind_spots=(),
+            promotion=promotion,
+        )
+
+    def test_positive_detection_is_not_enough_without_repair_value(self) -> None:
+        selected = ValueAwareSelector().select(
+            self.value_graph(
+                VerifierValueEstimate(
+                    actionability=0,
+                    repair_success=1,
+                    regression_risk=0,
+                    producer_evidence_overlap=0,
+                    confidence=1,
+                    predicted_duration_s=1,
+                )
+            ),
+            budget=2,
+            policy=self.policy(),
+        )
+        self.assertTrue(selected.no_op)
+        self.assertEqual(selected.verifier_ids, ())
+        self.assertEqual(selected.net_value, 0)
+
+    def test_high_overlap_with_producer_evidence_selects_noop(self) -> None:
+        selected = ValueAwareSelector().select(
+            self.value_graph(
+                VerifierValueEstimate(
+                    actionability=1,
+                    repair_success=1,
+                    regression_risk=0,
+                    producer_evidence_overlap=1,
+                    confidence=1,
+                    predicted_duration_s=1,
+                )
+            ),
+            budget=2,
+            policy=self.policy(),
+        )
+        self.assertTrue(selected.no_op)
+
+    def test_positive_conservative_net_value_beats_noop(self) -> None:
+        selected = ValueAwareSelector().select(
+            self.value_graph(
+                VerifierValueEstimate(
+                    actionability=1,
+                    repair_success=1,
+                    regression_risk=0,
+                    producer_evidence_overlap=0,
+                    confidence=1,
+                    predicted_duration_s=1,
+                )
+            ),
+            budget=2,
+            policy=self.policy(),
+        )
+        self.assertEqual(selected.verifier_ids, ("dynamic",))
+        self.assertFalse(selected.no_op)
+        self.assertGreater(selected.net_value, 0)
+
+    def test_promotion_revalidation_is_required_even_when_discovery_value_is_low(self) -> None:
+        from graft.schema import PromotionRequirement
+
+        promotion = PromotionRequirement("old", None, (), ("failure",), (), ())
+        selected = ValueAwareSelector().select(
+            self.value_graph(VerifierValueEstimate(), promotion=promotion),
+            budget=2,
+            policy=self.policy(),
+        )
+        self.assertEqual(selected.verifier_ids, ("dynamic",))
+        self.assertFalse(selected.no_op)
+
+    def test_predicted_wall_budget_can_make_noop_preferable(self) -> None:
+        selected = ValueAwareSelector().select(
+            self.value_graph(
+                VerifierValueEstimate(
+                    actionability=1,
+                    repair_success=1,
+                    regression_risk=0,
+                    producer_evidence_overlap=0,
+                    confidence=1,
+                    predicted_duration_s=30,
+                    predicted_model_cost_usd=0,
+                )
+            ),
+            budget=2,
+            policy=self.policy(),
+            available_wall_time_s=10,
+        )
+        self.assertTrue(selected.no_op)
+        self.assertEqual(selected.verifier_ids, ())
 
 
 if __name__ == "__main__":

@@ -4,23 +4,29 @@ GRAFT is a feedback controller around a free Codex producer, not a replacement p
 
 ```text
 producer session
-  ├─ UserPromptSubmit → raw multi-turn requirements
-  ├─ PostToolUse      → hashed tool facts
-  └─ Stop             → immutable checkpoint
+  ├─ UserPromptSubmit → raw multi-turn requirements / task epoch
+  ├─ PostToolUse      → bounded redacted semantic evidence
+  └─ Stop             → deterministic guards + immutable checkpoint
                               ↓
+                  value-aware only: LLM completion gate
+                     ┌────────┴────────┐
+                  No-Op        candidate_complete
+                                      ↓
                  structured Behavior/Failure modeler
                               ↓
                 structured verifier-registry planner
                               ↓
           Behavior–Failure–Verifier–Lineage hypergraph
                               ↓
-              budgeted high-order-aware retrieval
+       Original detection selector OR value-aware/No-Op selector
                               ↓
                      isolated verifier execution
                          ┌────┴────┐
                     allow stop   reproducible failure
                                       ↓
                             same producer continues
+                                      ↓
+                         executable promotion revalidation
 ```
 
 For failure mode `z` and selected set `S`, the implementation evaluates a mixture of the ordinary
@@ -40,6 +46,18 @@ sandboxing, generic capability templates, and lineage fields. Behaviors, Failure
 objectives, prompts, detection estimates, and shared-blind-spot instances are generated for the
 current task.
 
+For the opt-in value-aware strategy, candidate `f` is discounted by actionability, successful
+repair probability, overlap with producer evidence, and estimate uncertainty. Its joint
+risk-weighted detection benefit still uses the high-order graph, then subtracts predicted
+execution and repair-regression costs. Greedy marginal net value is compared against a formal
+No-Op candidate with value zero. This is a provisional decision model pending held-out calibration,
+not a correctness probability.
+
+Task-epoch state accumulates nominal verifier budget, measured wall time, known model cost and a
+count of stages whose model cost is unavailable. Cost history is stored by stable generic verifier
+template ID only; it contains duration/token/cost metadata, never source or prompt content. A
+conservative observed quantile overrides cold-start LLM cost predictions.
+
 Security boundaries:
 
 - project overrides require an exact trusted config hash;
@@ -53,6 +71,9 @@ Security boundaries:
 - verifier network access is off by default and requires a reviewed project opt-in;
 - verifier execution must leave the producer checkpoint unchanged;
 - evidence produced for one source hash cannot gate another.
+- after continuation feedback, a new checkpoint is accepted only when a designated executable
+  verifier reports `fixed_and_preserved` with observed eligible evidence; `not_fixed`, `regressed`,
+  and `unresolved` remain explicit report states.
 
 The plugin embeds the same core as the Python package. `scripts/sync_plugin_runtime.py` replaces the
 embedded tree atomically, and tests reject drift. Runtime state lives outside target repositories.

@@ -15,15 +15,29 @@ from graft.codex import hooks
 from graft.codex.session_state import SessionStateStore
 from graft.configuration import trust_project_config
 from graft.project_config import initialize_project
-from graft.schema import Behavior, FailureMode, FeedbackGraph, VerifierSpec
+from graft.schema import (
+    Behavior,
+    CompletionAssessment,
+    CompletionState,
+    FailureMode,
+    FeedbackGraph,
+    VerifierSpec,
+    VerifierValueEstimate,
+)
 
 
 class HookReplayTests(unittest.TestCase):
-    def _config(self, root: Path) -> None:
-        initialize_project(root)
+    def _config(self, root: Path, *, selection_policy: str = "original") -> None:
+        initialize_project(root, selection_policy=selection_policy)
         trust_project_config(root)
 
-    def _graph(self, exit_code: int, source_hash: str) -> FeedbackGraph:
+    def _graph(
+        self,
+        exit_code: int,
+        source_hash: str,
+        *,
+        value_aware: bool = False,
+    ) -> FeedbackGraph:
         verifier = VerifierSpec(
             verifier_id="task-specific-check",
             kind="command",
@@ -33,6 +47,19 @@ class HookReplayTests(unittest.TestCase):
             objective="execute a test-derived check",
             estimated_detection={"f": 1.0},
             command=(sys.executable, "-c", f"raise SystemExit({exit_code})"),
+            value_estimate=(
+                VerifierValueEstimate(
+                    actionability=1,
+                    repair_success=1,
+                    regression_risk=0,
+                    producer_evidence_overlap=0,
+                    confidence=1,
+                    predicted_duration_s=1,
+                    predicted_model_cost_usd=0,
+                )
+                if value_aware
+                else VerifierValueEstimate()
+            ),
         )
         return FeedbackGraph(
             source_hash=source_hash,
@@ -80,6 +107,41 @@ class HookReplayTests(unittest.TestCase):
                     "hook_event_name": "Stop",
                     "stop_hook_active": active,
                     "last_assistant_message": "arbitrary producer message",
+                },
+            )
+
+    def _value_stop(
+        self,
+        root: Path,
+        session: str,
+        *,
+        state: CompletionState,
+        exit_code: int = 0,
+    ) -> dict:
+        assessment = CompletionAssessment(state, 1.0, "test lifecycle assessment")
+        with (
+            patch(
+                "graft.codex.hooks.CodexCompletionGate.assess",
+                return_value=assessment,
+            ),
+            patch(
+                "graft.controller.CodexFeedbackGraphBuilder.build",
+                side_effect=lambda snapshot, requirements, config, **kwargs: self._graph(
+                    exit_code,
+                    snapshot.checkpoint_key,
+                    value_aware=True,
+                ),
+            ),
+        ):
+            return self._call(
+                hooks.stop,
+                {
+                    "session_id": session,
+                    "turn_id": "turn-value-stop",
+                    "cwd": str(root),
+                    "hook_event_name": "Stop",
+                    "stop_hook_active": False,
+                    "last_assistant_message": "candidate lifecycle message",
                 },
             )
 
@@ -215,6 +277,105 @@ class HookReplayTests(unittest.TestCase):
                 session_state = SessionStateStore(root).load("session-epochs")
                 self.assertEqual(session_state.task_epoch, 2)
                 self.assertEqual(session_state.requirements, ("Now add a comment",))
+
+    def test_value_aware_intermediate_turn_does_not_build_feedback_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:
+            root = Path(directory)
+            with patch.dict(
+                os.environ,
+                {"GRAFT_STATE_HOME": state, "GRAFT_CONFIG_HOME": str(Path(state) / "config")},
+            ):
+                source = root / "source.any"
+                source.write_text("before\n", encoding="utf-8")
+                self._config(root, selection_policy="value-aware")
+                self._prompt(root, "value-intermediate", "Implement the requested change")
+                source.write_text("partial\n", encoding="utf-8")
+                result = self._value_stop(
+                    root,
+                    "value-intermediate",
+                    state=CompletionState.INTERMEDIATE,
+                )
+                self.assertTrue(result["continue"])
+                captured = SessionStateStore(root).load("value-intermediate")
+                self.assertEqual(captured.status, "active")
+                self.assertIsNone(captured.last_verified_checkpoint_key)
+
+    def test_value_aware_noop_accepts_without_running_a_verifier(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:
+            root = Path(directory)
+            with patch.dict(
+                os.environ,
+                {"GRAFT_STATE_HOME": state, "GRAFT_CONFIG_HOME": str(Path(state) / "config")},
+            ):
+                source = root / "source.any"
+                source.write_text("before\n", encoding="utf-8")
+                self._config(root, selection_policy="value-aware")
+                self._prompt(root, "value-noop", "Implement the requested change")
+                source.write_text("candidate\n", encoding="utf-8")
+                low_value = self._graph(0, "placeholder", value_aware=False)
+                assessment = CompletionAssessment(
+                    CompletionState.CANDIDATE_COMPLETE,
+                    1.0,
+                    "delivery candidate",
+                )
+                with (
+                    patch(
+                        "graft.codex.hooks.CodexCompletionGate.assess",
+                        return_value=assessment,
+                    ),
+                    patch(
+                        "graft.controller.CodexFeedbackGraphBuilder.build",
+                        side_effect=lambda snapshot, requirements, config, **kwargs: FeedbackGraph(
+                            source_hash=snapshot.checkpoint_key,
+                            behaviors=low_value.behaviors,
+                            failure_modes=low_value.failure_modes,
+                            verifiers=low_value.verifiers,
+                            shared_blind_spots=(),
+                            producer_evidence=kwargs.get("producer_evidence"),
+                        ),
+                    ),
+                    patch("graft.controller.VerifierExecutor.run") as execute,
+                ):
+                    result = self._call(
+                        hooks.stop,
+                        {
+                            "session_id": "value-noop",
+                            "turn_id": "turn-value-noop",
+                            "cwd": str(root),
+                            "hook_event_name": "Stop",
+                            "stop_hook_active": False,
+                            "last_assistant_message": "ready",
+                        },
+                    )
+                self.assertTrue(result["continue"])
+                execute.assert_not_called()
+                captured = SessionStateStore(root).load("value-noop")
+                self.assertEqual(captured.status, "accepted")
+                self.assertEqual(captured.spent_budget, 0)
+
+    def test_value_aware_feedback_creates_a_promotion_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:
+            root = Path(directory)
+            with patch.dict(
+                os.environ,
+                {"GRAFT_STATE_HOME": state, "GRAFT_CONFIG_HOME": str(Path(state) / "config")},
+            ):
+                source = root / "source.any"
+                source.write_text("before\n", encoding="utf-8")
+                self._config(root, selection_policy="value-aware")
+                self._prompt(root, "value-feedback", "Implement the requested change")
+                source.write_text("candidate\n", encoding="utf-8")
+                result = self._value_stop(
+                    root,
+                    "value-feedback",
+                    state=CompletionState.CANDIDATE_COMPLETE,
+                    exit_code=1,
+                )
+                self.assertEqual(result["decision"], "block")
+                captured = SessionStateStore(root).load("value-feedback")
+                self.assertIsNotNone(captured.pending_promotion)
+                self.assertEqual(captured.verification_round, 1)
+                self.assertGreater(captured.spent_budget, 0)
 
 
 if __name__ == "__main__":

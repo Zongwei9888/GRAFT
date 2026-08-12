@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from graft.project_config import initialize_project, set_project_enabled
-from graft.registry import ORIGINAL_METHOD_ID, load_config
+from graft.registry import ORIGINAL_METHOD_ID, VALUE_AWARE_METHOD_ID, load_config
 
 
 class ProjectConfigTests(unittest.TestCase):
@@ -44,6 +44,25 @@ class ProjectConfigTests(unittest.TestCase):
             self.assertFalse(enabled.created)
             self.assertTrue(load_config(enabled.path).enabled)
             self.assertTrue(enabled.verifier_ids)
+
+    def test_value_aware_policy_is_explicit_and_domain_neutral(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = initialize_project(
+                Path(directory), selection_policy="value-aware"
+            )
+            config = load_config(result.path)
+            self.assertEqual(config.method, VALUE_AWARE_METHOD_ID)
+            self.assertEqual(config.selection.strategy, "value-aware")
+            self.assertIsNotNone(config.completion_gate)
+            raw = result.path.read_text(encoding="utf-8").lower()
+            for task_specific_token in (
+                "pytest",
+                "npm",
+                "cargo",
+                "golang",
+                "terminal-bench",
+            ):
+                self.assertNotIn(task_specific_token, raw)
 
     def test_verifier_network_access_is_explicit_and_limited_to_write_sandboxes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

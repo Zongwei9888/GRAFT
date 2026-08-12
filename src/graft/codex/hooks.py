@@ -1,23 +1,32 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
-from datetime import datetime, timezone
+import time
 from pathlib import Path
 from typing import Any
 
 from graft.codex.checkpoint_policy import DefaultCheckpointPolicy
+from graft.codex.completion import CodexCompletionGate, CompletionGateError
 from graft.codex.event_dedup import claim_event
-from graft.codex.session_state import SessionStateStore, prompt_hash
+from graft.codex.session_state import SessionState, SessionStateStore, prompt_hash
+from graft.codex.telemetry import ProducerEvidenceLedger, record_from_hook_event
+from graft.cost_history import CostHistoryStore
+from graft.costing import stage_cost_from_result
 from graft.configuration import resolve_config
 from graft.controller import GraftController
 from graft.evidence.baseline_archive import archive_baseline
 from graft.evidence.checkpoint_archive import archive_checkpoint
 from graft.evidence.snapshot import hash_tree, hash_tree_manifest
 from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
-from graft.schema import DecisionKind
+from graft.schema import (
+    CompletionState,
+    Decision,
+    DecisionKind,
+    PromotionRequirement,
+    Verdict,
+)
 
 
 def _read_event() -> dict[str, Any]:
@@ -77,24 +86,9 @@ def post_tool_use() -> int:
     if not claim_event(paths.events_dir, "PostToolUse", event):
         return _emit({"continue": True})
     session_id = str(event.get("session_id", "unknown"))
-    telemetry_dir = paths.telemetry_dir
-    telemetry_dir.mkdir(parents=True, exist_ok=True)
-    tool_input = event.get("tool_input")
-    tool_response = event.get("tool_response")
-    record = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_id": session_id,
-        "turn_id": event.get("turn_id"),
-        "tool_name": event.get("tool_name"),
-        "tool_use_id": event.get("tool_use_id"),
-        "tool_input_hash": _hash_json(tool_input),
-        "tool_response_hash": _hash_json(tool_response),
-    }
-    safe = "".join(character if character.isalnum() else "_" for character in session_id)
-    with (telemetry_dir / f"{safe or 'unknown'}.jsonl").open(
-        "a", encoding="utf-8"
-    ) as handle:
-        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    state = SessionStateStore(workspace, root=paths.state_dir).load(session_id)
+    record = record_from_hook_event(event, task_epoch=state.task_epoch)
+    ProducerEvidenceLedger(paths.telemetry_dir, session_id).append(record)
     return _emit({"continue": True})
 
 
@@ -138,6 +132,64 @@ def stop() -> int:
             store.save(state)
             return _emit({"continue": True})
 
+        evidence_ledger = ProducerEvidenceLedger(paths.telemetry_dir, session_id)
+        producer_evidence = evidence_ledger.summarize(task_epoch=state.task_epoch)
+        if (
+            config.selection.strategy == "value-aware"
+            and config.checkpoint_mode == "completion"
+        ):
+            if config.completion_gate is None:
+                raise ValueError("value-aware completion mode requires a completion gate")
+            try:
+                assessment = CodexCompletionGate().assess(
+                    snapshot,
+                    state.requirements,
+                    last_assistant_message=event.get("last_assistant_message"),
+                    producer_evidence=producer_evidence,
+                    config=config.completion_gate,
+                    config_path=resolution.path,
+                    environment_fingerprint=config.environment_fingerprint,
+                )
+            except CompletionGateError as exc:
+                state.status = "unresolved"
+                store.save(state)
+                return _emit(
+                    {
+                        "continue": True,
+                        "systemMessage": f"GRAFT completion gate abstained: {exc}",
+                    }
+                )
+            if assessment.stage_cost is not None:
+                state.stage_costs.append(assessment.stage_cost)
+                state.spent_wall_time_s += assessment.stage_cost.duration_s
+                _record_model_cost(state, assessment.stage_cost)
+            if assessment.state != CompletionState.CANDIDATE_COMPLETE:
+                store.save(state)
+                return _emit({"continue": True})
+
+        available_budget = config.budget
+        available_wall_time_s: float | None = None
+        available_model_cost_usd: float | None = None
+        if config.selection.strategy == "value-aware":
+            available_budget = max(0.0, config.budget - state.spent_budget)
+            available_wall_time_s = max(
+                0.0,
+                config.selection.wall_time_budget_s - state.spent_wall_time_s,
+            )
+            available_model_cost_usd = max(
+                0.0,
+                config.selection.model_cost_budget_usd - state.spent_model_cost_usd,
+            )
+            if available_budget <= 1e-12 or available_wall_time_s <= 1e-12:
+                state.status = "unresolved"
+                store.save(state)
+                return _emit(
+                    {
+                        "continue": True,
+                        "systemMessage": "GRAFT task-epoch verification resource budget is exhausted.",
+                    }
+                )
+
         archive_checkpoint(
             snapshot,
             session_id=session_id,
@@ -154,12 +206,43 @@ def stop() -> int:
                 }
             )
 
+        verification_started = time.monotonic()
+        cost_history = CostHistoryStore(paths.cost_history_dir)
         decision = controller.verify(
             workspace,
             requirements=state.requirements,
             session_id=session_id,
             snapshot=snapshot,
+            producer_evidence=producer_evidence,
+            available_budget=available_budget,
+            promotion=(
+                state.pending_promotion
+                if config.selection.strategy == "value-aware"
+                else None
+            ),
+            historical_costs=(
+                cost_history.estimates()
+                if config.selection.strategy == "value-aware"
+                else None
+            ),
+            available_wall_time_s=available_wall_time_s,
+            available_model_cost_usd=available_model_cost_usd,
         )
+        if config.selection.strategy == "value-aware":
+            try:
+                cost_history.record(decision)
+            except OSError:
+                # Cost calibration is advisory. Losing one observation must not alter
+                # a source-bound verification decision or the producer lifecycle.
+                pass
+        state.spent_wall_time_s += time.monotonic() - verification_started
+        _record_decision_costs(
+            state,
+            decision,
+            value_aware=config.selection.strategy == "value-aware",
+        )
+        if decision.promotion_outcome is not None:
+            state.promotion_status = decision.promotion_outcome.value
         if decision.kind == DecisionKind.CONTINUE_WITH_EVIDENCE:
             feedback_digest = prompt_hash(decision.reason)
             if (
@@ -177,6 +260,10 @@ def stop() -> int:
             state.last_blocked_tree_hash = snapshot.tree_hash
             state.last_feedback_hash = feedback_digest
             state.pending_feedback_hash = feedback_digest
+            if config.selection.strategy == "value-aware":
+                state.pending_promotion = _promotion_from_decision(decision)
+                if decision.promotion_outcome is None:
+                    state.promotion_status = "pending"
             state.verification_round += 1
             state.status = "active"
             store.save(state)
@@ -188,6 +275,7 @@ def stop() -> int:
             state.baseline_files = list(snapshot.files)
             state.baseline_file_hashes = dict(snapshot.file_hashes)
             state.verification_round = 0
+            state.pending_promotion = None
             state.status = "accepted"
             store.save(state)
             return _emit({"continue": True})
@@ -214,13 +302,6 @@ def stop() -> int:
         )
 
 
-def _hash_json(value: Any) -> str:
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str).encode(
-        "utf-8"
-    )
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def main(argv: list[str] | None = None) -> int:
     arguments = argv if argv is not None else sys.argv[1:]
     parser = argparse.ArgumentParser(prog="graft-hook")
@@ -233,6 +314,83 @@ def main(argv: list[str] | None = None) -> int:
         "stop": stop,
     }
     return handlers[parsed.event]()
+
+
+def _record_decision_costs(
+    state: SessionState, decision: Decision, *, value_aware: bool
+) -> None:
+    if decision.graph is not None:
+        state.stage_costs.extend(decision.graph.stage_costs)
+        for cost in decision.graph.stage_costs:
+            _record_model_cost(state, cost)
+    result_costs = tuple(stage_cost_from_result(item) for item in decision.results)
+    state.stage_costs.extend(result_costs)
+    for cost in result_costs:
+        _record_model_cost(state, cost)
+    if value_aware and decision.selection is not None:
+        state.spent_budget += decision.selection.total_cost
+
+
+def _record_model_cost(state: SessionState, cost) -> None:
+    if cost.estimated_cost_usd is None:
+        state.unknown_cost_stages += 1
+    else:
+        state.spent_model_cost_usd += cost.estimated_cost_usd
+
+
+def _promotion_from_decision(decision: Decision) -> PromotionRequirement:
+    graph = decision.graph
+    if graph is None:
+        return PromotionRequirement(
+            feedback_checkpoint_key=decision.snapshot.checkpoint_key,
+            report_path=decision.report_path,
+            behavior_descriptions=(),
+            failure_descriptions=(),
+            evidence_observations=(),
+            reproduction_commands=(),
+        )
+    behaviors = {item.behavior_id: item for item in graph.behaviors}
+    failures = {item.failure_mode_id: item for item in graph.failure_modes}
+    blocking = tuple(
+        item
+        for item in decision.results
+        if item.verdict == Verdict.FAIL and item.blocking and item.reproducible
+    )
+    behavior_descriptions: list[str] = []
+    failure_descriptions: list[str] = []
+    observations: list[str] = []
+    commands: list[tuple[str, ...]] = []
+    eligible_origins = {
+        "authoritative_runtime",
+        "baseline_repository",
+        "requirement_derived_runtime",
+    }
+    for result in blocking:
+        for failure_id in result.failure_modes:
+            failure = failures.get(failure_id)
+            if failure is None:
+                continue
+            failure_descriptions.append(failure.description)
+            behavior = behaviors.get(failure.behavior_id)
+            if behavior is not None:
+                behavior_descriptions.append(behavior.description)
+        if result.command:
+            commands.append(result.command)
+        for item in result.evidence:
+            if item.oracle_origin not in eligible_origins:
+                continue
+            if item.observation:
+                observations.append(item.observation)
+            if item.command:
+                commands.append(item.command)
+    return PromotionRequirement(
+        feedback_checkpoint_key=decision.snapshot.checkpoint_key,
+        report_path=decision.report_path,
+        behavior_descriptions=tuple(dict.fromkeys(behavior_descriptions)),
+        failure_descriptions=tuple(dict.fromkeys(failure_descriptions)),
+        evidence_observations=tuple(dict.fromkeys(observations)),
+        reproduction_commands=tuple(dict.fromkeys(commands)),
+    )
 
 
 if __name__ == "__main__":

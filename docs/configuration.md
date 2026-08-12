@@ -18,6 +18,14 @@ graft config trust
 graft status
 ```
 
+The frozen Original baseline is the default. The uncalibrated optimization is an explicit opt-in:
+
+```bash
+graft init --selection-policy value-aware
+graft config validate
+graft config trust
+```
+
 Network access for verifier agents is disabled by default. If the authoritative runtime under test
 is a network service, initialize explicitly with:
 
@@ -44,16 +52,17 @@ graft config enable
 
 | Field | Meaning |
 |---|---|
-| `method` | Must be `graft-original` |
+| `method` | `graft-original` or the opt-in `graft-value-aware` |
 | `enabled` | Project-level execution switch |
-| `budget` | Maximum total candidate-verifier cost |
+| `budget` | Maximum nominal verifier cost; value-aware accumulates it per task epoch |
 | `checkpoint_mode` | `completion`, `strict`, or explicit protocol mode |
 | `max_feedback_rounds` | Bounded continuations within one task epoch |
 | `failure_policy` | `open` warns on unresolved; `closed` continues on unresolved |
-| `modeling` | Models, timeouts, and prompt-family provenance for graph construction |
+| `modeling` | Models, timeouts, prompt provenance, and the value-aware completion gate |
 | `verifier_templates` | General capabilities and isolation policy, not task instances |
 | `verifier_templates[].network_access` | Explicit network policy for a verifier sandbox |
-| `selection` | Hypergraph selector and residual-risk thresholds |
+| `selection.strategy` | Frozen `original` or opt-in `value-aware` |
+| `selection` | Hypergraph, net-value, uncertainty, cost, and resource-budget parameters |
 
 The runtime modeler creates Behaviors and Failure Modes. The planner creates concrete verifier IDs,
 objectives, prompts, target edges, actionable-detection estimates, lineage additions, and
@@ -83,8 +92,12 @@ config directory or `GRAFT_CONFIG_HOME`.
 Raw user prompts, the task-start per-file hash manifest, and a bounded immutable task-start text archive
 are retained locally to reconstruct multi-turn requirements, produce bounded semantic diffs, and
 distinguish baseline authority from candidate-authored artifacts. Tool inputs and responses are
-stored only as hashes. Reports contain model-derived task structures and evidence, so the state
-directory remains user-private.
+stored as integrity hashes plus bounded redacted previews, outcomes, paths and durations. Reports
+contain model-derived task structures and evidence, so the state directory remains user-private.
+
+The workspace state directory also contains content-free verifier cost observations keyed by
+generic template ID. If token or currency usage is unavailable from Codex, it remains `unknown` and
+is counted as such rather than converted to zero.
 
 - macOS: `~/Library/Application Support/GRAFT/`;
 - Linux: `~/.local/state/graft/`;

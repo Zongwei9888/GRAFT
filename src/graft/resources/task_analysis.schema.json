@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "GRAFT Original task analysis",
+  "title": "GRAFT task analysis",
   "type": "object",
   "properties": {
     "behaviors": {

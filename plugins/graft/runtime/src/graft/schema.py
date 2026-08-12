@@ -20,6 +20,105 @@ class DecisionKind(str, Enum):
     SYSTEM_ERROR = "system_error"
 
 
+class CompletionState(str, Enum):
+    CANDIDATE_COMPLETE = "candidate_complete"
+    INTERMEDIATE = "intermediate"
+    QUESTION = "question"
+    EXPLANATION = "explanation"
+    BLOCKED = "blocked"
+    ABSTAIN = "abstain"
+
+
+class PromotionOutcome(str, Enum):
+    FIXED_AND_PRESERVED = "fixed_and_preserved"
+    NOT_FIXED = "not_fixed"
+    REGRESSED = "regressed"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True)
+class StageCost:
+    stage_id: str
+    kind: str
+    duration_s: float
+    input_tokens: int | None = None
+    cached_input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_cost_usd: float | None = None
+
+    @property
+    def usage_known(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.input_tokens,
+                self.cached_input_tokens,
+                self.output_tokens,
+                self.estimated_cost_usd,
+            )
+        )
+
+
+@dataclass(frozen=True)
+class ProducerEvidenceRecord:
+    timestamp: str
+    session_id: str
+    turn_id: str | None
+    task_epoch: int
+    tool_name: str
+    family: str
+    outcome: str
+    input_hash: str
+    response_hash: str
+    command_preview: str | None = None
+    result_preview: str | None = None
+    changed_paths: tuple[str, ...] = ()
+    exit_code: int | None = None
+    duration_s: float | None = None
+
+
+@dataclass(frozen=True)
+class ProducerEvidenceSummary:
+    task_epoch: int
+    event_count: int
+    succeeded: int
+    failed: int
+    unknown: int
+    total_duration_s: float | None
+    command_previews: tuple[str, ...] = ()
+    failure_previews: tuple[str, ...] = ()
+    changed_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CompletionAssessment:
+    state: CompletionState
+    confidence: float
+    reason: str
+    stage_cost: StageCost | None = None
+
+
+@dataclass(frozen=True)
+class PromotionRequirement:
+    feedback_checkpoint_key: str
+    report_path: str | None
+    behavior_descriptions: tuple[str, ...]
+    failure_descriptions: tuple[str, ...]
+    evidence_observations: tuple[str, ...]
+    reproduction_commands: tuple[tuple[str, ...], ...]
+
+
+@dataclass(frozen=True)
+class VerifierValueEstimate:
+    actionability: float = 0.0
+    repair_success: float = 0.0
+    regression_risk: float = 1.0
+    producer_evidence_overlap: float = 1.0
+    confidence: float = 0.0
+    predicted_duration_s: float | None = None
+    predicted_model_cost_usd: float | None = None
+
+
 @dataclass(frozen=True)
 class EvidenceItem:
     kind: str
@@ -141,6 +240,8 @@ class VerifierSpec:
     failure_exit_codes: tuple[int, ...] = (1,)
     working_directory: str | None = None
     lineage: Lineage = field(default_factory=Lineage)
+    value_estimate: VerifierValueEstimate = field(default_factory=VerifierValueEstimate)
+    revalidates_feedback: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,6 +263,10 @@ class FeedbackGraph:
     verifiers: tuple[VerifierSpec, ...]
     shared_blind_spots: tuple[SharedBlindSpot, ...]
     uncertainties: tuple[str, ...] = ()
+    producer_evidence: ProducerEvidenceSummary | None = None
+    stage_costs: tuple[StageCost, ...] = ()
+    promotion: PromotionRequirement | None = None
+    method: str = "graft-original"
 
 
 @dataclass(frozen=True)
@@ -189,6 +294,10 @@ class Selection:
     total_cost: float
     feasible: bool
     evaluated_candidates: int
+    policy: str = "original"
+    net_value: float = 0.0
+    no_op: bool = False
+    marginal_values: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -209,6 +318,10 @@ class VerifierResult:
     error: str | None = None
     confidence: float = 0.0
     lineage: Lineage = field(default_factory=Lineage)
+    usage: Mapping[str, Any] = field(default_factory=dict)
+    estimated_cost_usd: float | None = None
+    executed_evidence: bool = False
+    promotion_outcome: PromotionOutcome | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +333,7 @@ class Decision:
     selection: Selection | None = None
     results: tuple[VerifierResult, ...] = ()
     report_path: str | None = None
+    promotion_outcome: PromotionOutcome | None = None
 
 
 @dataclass(frozen=True)

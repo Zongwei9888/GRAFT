@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from graft.registry import default_original_config_payload
+from graft.registry import (
+    default_original_config_payload,
+    default_value_aware_config_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -30,10 +33,11 @@ def initialize_project(
     workspace: Path,
     *,
     checkpoint_mode: str = "completion",
+    selection_policy: str = "original",
     verifier_network_access: bool = False,
     force: bool = False,
 ) -> ProjectConfigResult:
-    """Create a domain-neutral local override for GRAFT Original.
+    """Create a domain-neutral local override for a supported GRAFT policy.
 
     Initialization deliberately does not discover language-specific commands. At runtime, the
     modeler derives Behaviors and Failure Modes from the raw task, and the planner instantiates
@@ -42,13 +46,19 @@ def initialize_project(
 
     if checkpoint_mode not in {"completion", "strict", "explicit"}:
         raise ValueError("checkpoint_mode must be completion, strict, or explicit")
+    if selection_policy not in {"original", "value-aware"}:
+        raise ValueError("selection_policy must be original or value-aware")
     root = workspace.expanduser().resolve()
     target = root / ".graft" / "config.json"
     if target.exists() and not force:
         raise FileExistsError(
             f"GRAFT configuration already exists: {target}; use --force to replace it"
         )
-    payload = default_original_config_payload()
+    payload = (
+        default_value_aware_config_payload()
+        if selection_policy == "value-aware"
+        else default_original_config_payload()
+    )
     payload["checkpoint_mode"] = checkpoint_mode
     if verifier_network_access:
         for template in payload["verifier_templates"]:
@@ -84,7 +94,7 @@ def set_project_enabled(workspace: Path, enabled: bool) -> ProjectToggleResult:
             raise ValueError(f"GRAFT config must contain a JSON object: {target}")
         if int(raw.get("version", 0)) != 2:
             raise ValueError(
-                "Only GRAFT Original config version 2 can be enabled or disabled; "
+                "Only GRAFT config version 2 can be enabled or disabled; "
                 "regenerate legacy configs with `graft init --force`"
             )
         raw["enabled"] = enabled

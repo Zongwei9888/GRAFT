@@ -12,11 +12,13 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from graft.codex.cli_runner import CliCodexRunner, CodexExecutionError
+from graft.costing import stage_cost_from_turn
 from graft.evidence.baseline_archive import baseline_diff_excerpt
 from graft.evidence.snapshot import freeze_source
 from graft.schema import (
     EvidenceItem,
     FeedbackGraph,
+    PromotionOutcome,
     RunConfig,
     SourceSnapshot,
     Verdict,
@@ -129,6 +131,14 @@ class VerifierExecutor:
             evidence = (
                 EvidenceItem(kind="command", observation=summary, command=command),
             ) if verdict == Verdict.FAIL else ()
+            promotion_outcome = None
+            if spec.revalidates_feedback:
+                if verdict == Verdict.PASS:
+                    promotion_outcome = PromotionOutcome.FIXED_AND_PRESERVED
+                elif verdict == Verdict.FAIL:
+                    promotion_outcome = PromotionOutcome.NOT_FIXED
+                else:
+                    promotion_outcome = PromotionOutcome.UNRESOLVED
 
         mutation = _producer_workspace_mutation(
             snapshot,
@@ -154,6 +164,9 @@ class VerifierExecutor:
             exit_code=completed.returncode,
             confidence=1.0 if verdict in {Verdict.PASS, Verdict.FAIL} else 0.0,
             lineage=spec.lineage,
+            usage={},
+            executed_evidence=True,
+            promotion_outcome=promotion_outcome,
         )
 
     def _run_codex_verifier(
@@ -247,6 +260,14 @@ class VerifierExecutor:
                 confidence = 0.0
             stdout = _trim(turn.final_response)
             stderr = _trim(turn.stderr)
+            promotion_outcome = None
+            if spec.revalidates_feedback:
+                try:
+                    promotion_outcome = PromotionOutcome(
+                        str(raw.get("promotion_outcome", "unresolved"))
+                    )
+                except ValueError:
+                    promotion_outcome = PromotionOutcome.UNRESOLVED
 
         mutation = _producer_workspace_mutation(
             snapshot,
@@ -256,6 +277,7 @@ class VerifierExecutor:
         )
         if mutation:
             return self._error_result(spec, snapshot, turn.duration_s, mutation)
+        stage_cost = stage_cost_from_turn(spec.verifier_id, "verifier", turn)
         return VerifierResult(
             verifier_id=spec.verifier_id,
             verdict=verdict,
@@ -271,6 +293,10 @@ class VerifierExecutor:
             exit_code=turn.return_code,
             confidence=confidence,
             lineage=spec.lineage,
+            usage=dict(turn.usage),
+            estimated_cost_usd=stage_cost.estimated_cost_usd,
+            executed_evidence=bool(reproduced_modes),
+            promotion_outcome=promotion_outcome,
         )
 
     @staticmethod
@@ -328,12 +354,26 @@ def _verifier_prompt(
     if changed == ():
         changed_text = "- <none>"
     baseline_diff = baseline_diff_excerpt(snapshot)
+    promotion_instructions = ""
+    if spec.revalidates_feedback:
+        promotion_instructions = """
+This verifier is the required candidate-promotion guard. Re-run the prior feedback reproduction
+named in the planner objective when it is available. Return PASS only after an eligible command or
+runtime artifact was actually observed and shows the prior failure is fixed while the named raw
+behaviors remain preserved. Include that executed command/artifact as evidence even for PASS, map it
+to the target failure modes, and use the same evidence-origin rules below. If execution is
+unavailable or the result is ambiguous, ABSTAIN; source review alone cannot promote the candidate.
+Set promotion_outcome to exactly one of: fixed_and_preserved, not_fixed, regressed, unresolved.
+Use fixed_and_preserved only with executed evidence for both the repaired finding and the named
+preserved behavior. Use regressed when the repair fixes or changes the target but violates a named
+raw or unchanged-baseline behavior.
+"""
     mode = (
         "You may create temporary tests and artifacts because this is a disposable workspace copy."
         if spec.isolation == "temporary-copy"
         else "Do not modify files. You may inspect and execute read-only checks."
     )
-    return f"""You are a task-specific verifier instantiated by GRAFT Original.
+    return f"""You are a task-specific verifier instantiated by {graph.method}.
 
 Verifier objective:
 {spec.objective}
@@ -359,6 +399,7 @@ Files added or modified after the task baseline:
 Immutable baseline-to-candidate diff (implementation evidence only; not a contract oracle):
 {baseline_diff}
 {mode}
+{promotion_instructions}
 
 Inspect the actual repository and use tools when they can establish observable evidence. Do not
 trust the producer's summary. The raw requirements are authoritative. Baseline repository evidence

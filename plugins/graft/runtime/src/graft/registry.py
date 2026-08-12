@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -9,6 +10,7 @@ from graft.schema import Lineage, VerifierTemplate, tuple_of_strings
 
 
 ORIGINAL_METHOD_ID = "graft-original"
+VALUE_AWARE_METHOD_ID = "graft-value-aware"
 
 
 @dataclass(frozen=True)
@@ -19,11 +21,27 @@ class ModelStageConfig:
 
 
 @dataclass(frozen=True)
+class CompletionGateConfig:
+    stage: ModelStageConfig
+    min_confidence: float
+
+
+@dataclass(frozen=True)
 class SelectionPolicy:
     algorithm: str
     max_verifiers: int
     min_marginal_gain_per_cost: float
     residual_risk_threshold: float
+    strategy: str = "original"
+    min_net_value: float = 0.0
+    uncertainty_penalty: float = 0.25
+    repair_value: float = 1.0
+    regression_cost: float = 1.0
+    wall_time_budget_s: float = 120.0
+    model_cost_budget_usd: float = 1.0
+    wall_time_weight: float = 0.25
+    model_cost_weight: float = 0.25
+    nominal_cost_weight: float = 0.10
 
 
 @dataclass(frozen=True)
@@ -38,6 +56,7 @@ class GraftConfig:
     environment_fingerprint: str
     behavior_modeler: ModelStageConfig
     verifier_planner: ModelStageConfig
+    completion_gate: CompletionGateConfig | None
     verifier_templates: tuple[VerifierTemplate, ...]
     selection: SelectionPolicy
 
@@ -153,11 +172,11 @@ def load_config(path: Path) -> GraftConfig:
     version = int(raw.get("version", 0))
     if version != 2:
         raise ValueError(
-            "GRAFT Original requires config version 2; version 1 empirical-fixture "
+            "GRAFT requires config version 2; version 1 empirical-fixture "
             "configs are historical experiment artifacts"
         )
     method = str(raw.get("method", ""))
-    if method != ORIGINAL_METHOD_ID:
+    if method not in {ORIGINAL_METHOD_ID, VALUE_AWARE_METHOD_ID}:
         raise ValueError(f"Unsupported GRAFT method: {method or '<missing>'}")
     failure_policy = str(raw.get("failure_policy", "open"))
     if failure_policy not in {"open", "closed"}:
@@ -177,6 +196,18 @@ def load_config(path: Path) -> GraftConfig:
     planner_raw = modeling.get("verifier_planner", {})
     if not isinstance(behavior_raw, Mapping) or not isinstance(planner_raw, Mapping):
         raise ValueError("behavior_modeler and verifier_planner must be objects")
+    completion_gate: CompletionGateConfig | None = None
+    completion_raw = modeling.get("completion_gate")
+    if completion_raw is not None:
+        if not isinstance(completion_raw, Mapping):
+            raise ValueError("completion_gate must be an object")
+        minimum_confidence = float(completion_raw.get("min_confidence", 0.80))
+        if not 0 <= minimum_confidence <= 1:
+            raise ValueError("completion_gate.min_confidence must be in [0,1]")
+        completion_gate = CompletionGateConfig(
+            stage=_model_stage(completion_raw, label="completion_gate"),
+            min_confidence=minimum_confidence,
+        )
 
     raw_templates = raw.get("verifier_templates", [])
     if not isinstance(raw_templates, list):
@@ -188,19 +219,68 @@ def load_config(path: Path) -> GraftConfig:
     if len(template_ids) != len(set(template_ids)):
         raise ValueError("verifier template ids must be unique")
     if bool(raw.get("enabled", True)) and not templates:
-        raise ValueError("enabled GRAFT Original configurations need verifier templates")
+        raise ValueError("enabled GRAFT configurations need verifier templates")
 
     selection_raw = raw.get("selection", {})
     if not isinstance(selection_raw, Mapping):
         raise ValueError("selection must be an object")
-    algorithm = str(selection_raw.get("algorithm", "lazy-greedy-hypergraph"))
-    if algorithm != "lazy-greedy-hypergraph":
-        raise ValueError("GRAFT Original uses lazy-greedy-hypergraph selection")
+    strategy = str(
+        selection_raw.get(
+            "strategy",
+            "value-aware" if method == VALUE_AWARE_METHOD_ID else "original",
+        )
+    )
+    if strategy not in {"original", "value-aware"}:
+        raise ValueError("selection.strategy must be original or value-aware")
+    algorithm = str(
+        selection_raw.get(
+            "algorithm",
+            "value-aware-hypergraph"
+            if strategy == "value-aware"
+            else "lazy-greedy-hypergraph",
+        )
+    )
+    expected_algorithm = (
+        "value-aware-hypergraph"
+        if strategy == "value-aware"
+        else "lazy-greedy-hypergraph"
+    )
+    if algorithm != expected_algorithm:
+        raise ValueError(
+            f"selection algorithm {algorithm} does not match strategy {strategy}"
+        )
+    if method == ORIGINAL_METHOD_ID and strategy != "original":
+        raise ValueError("graft-original must use the original selection strategy")
+    if method == VALUE_AWARE_METHOD_ID and strategy != "value-aware":
+        raise ValueError("graft-value-aware must use the value-aware selection strategy")
+    if strategy == "value-aware" and completion_gate is None:
+        raise ValueError("graft-value-aware requires modeling.completion_gate")
     max_verifiers = int(selection_raw.get("max_verifiers", 4))
     minimum = float(selection_raw.get("min_marginal_gain_per_cost", 0.01))
     residual_threshold = float(selection_raw.get("residual_risk_threshold", 0.20))
+    min_net_value = float(selection_raw.get("min_net_value", 0.0))
+    uncertainty_penalty = float(selection_raw.get("uncertainty_penalty", 0.25))
+    repair_value = float(selection_raw.get("repair_value", 1.0))
+    regression_cost = float(selection_raw.get("regression_cost", 1.0))
+    wall_time_budget_s = float(selection_raw.get("wall_time_budget_s", 120.0))
+    model_cost_budget_usd = float(selection_raw.get("model_cost_budget_usd", 1.0))
+    wall_time_weight = float(selection_raw.get("wall_time_weight", 0.25))
+    model_cost_weight = float(selection_raw.get("model_cost_weight", 0.25))
+    nominal_cost_weight = float(selection_raw.get("nominal_cost_weight", 0.10))
     if max_verifiers <= 0 or minimum < 0 or not 0 <= residual_threshold <= 1:
         raise ValueError("invalid selection thresholds")
+    if (
+        min_net_value < 0
+        or uncertainty_penalty < 0
+        or repair_value < 0
+        or regression_cost < 0
+        or wall_time_budget_s <= 0
+        or model_cost_budget_usd <= 0
+        or wall_time_weight < 0
+        or model_cost_weight < 0
+        or nominal_cost_weight < 0
+    ):
+        raise ValueError("invalid value-aware selection parameters")
 
     return GraftConfig(
         version=2,
@@ -215,12 +295,23 @@ def load_config(path: Path) -> GraftConfig:
         ),
         behavior_modeler=_model_stage(behavior_raw, label="behavior_modeler"),
         verifier_planner=_model_stage(planner_raw, label="verifier_planner"),
+        completion_gate=completion_gate,
         verifier_templates=templates,
         selection=SelectionPolicy(
             algorithm=algorithm,
             max_verifiers=max_verifiers,
             min_marginal_gain_per_cost=minimum,
             residual_risk_threshold=residual_threshold,
+            strategy=strategy,
+            min_net_value=min_net_value,
+            uncertainty_penalty=uncertainty_penalty,
+            repair_value=repair_value,
+            regression_cost=regression_cost,
+            wall_time_budget_s=wall_time_budget_s,
+            model_cost_budget_usd=model_cost_budget_usd,
+            wall_time_weight=wall_time_weight,
+            model_cost_weight=model_cost_weight,
+            nominal_cost_weight=nominal_cost_weight,
         ),
     )
 
@@ -379,6 +470,7 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
             else []
         ),
         "selection": {
+            "strategy": "original",
             "algorithm": "lazy-greedy-hypergraph",
             "max_verifiers": 4,
             "min_marginal_gain_per_cost": 0.01,
@@ -386,3 +478,35 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
         },
         "_method_contract": "docs/method-original-frozen.md",
     }
+
+
+def default_value_aware_config_payload(*, enabled: bool = True) -> dict[str, Any]:
+    """Return the domain-neutral value-aware policy without task-specific routes."""
+
+    payload = deepcopy(default_original_config_payload(enabled=enabled))
+    payload["method"] = VALUE_AWARE_METHOD_ID
+    payload["environment_fingerprint"] = "graft-value-aware-v1"
+    payload["modeling"]["completion_gate"] = {
+        "model": None,
+        "timeout_s": 45,
+        "prompt_family": "graft-completion-gate-v1",
+        "min_confidence": 0.80,
+    }
+    payload["selection"] = {
+        "strategy": "value-aware",
+        "algorithm": "value-aware-hypergraph",
+        "max_verifiers": 4,
+        "min_marginal_gain_per_cost": 0.0,
+        "residual_risk_threshold": 0.20,
+        "min_net_value": 0.0,
+        "uncertainty_penalty": 0.25,
+        "repair_value": 1.0,
+        "regression_cost": 1.0,
+        "wall_time_budget_s": 120.0,
+        "model_cost_budget_usd": 1.0,
+        "wall_time_weight": 0.25,
+        "model_cost_weight": 0.25,
+        "nominal_cost_weight": 0.10,
+    }
+    payload["_method_contract"] = "docs/graft-core-definition-zh.md"
+    return payload

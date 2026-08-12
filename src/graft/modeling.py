@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from graft.codex.cli_runner import CliCodexRunner, CodexExecutionError
+from graft.costing import stage_cost_from_turn
 from graft.evidence.baseline_archive import baseline_diff_excerpt
 from graft.evidence.snapshot import freeze_source
 from graft.registry import GraftConfig, ModelStageConfig
@@ -15,12 +16,16 @@ from graft.schema import (
     FailureMode,
     FeedbackGraph,
     Lineage,
+    ProducerEvidenceSummary,
+    PromotionRequirement,
     RunConfig,
     SharedBlindSpot,
     SourceSnapshot,
+    StageCost,
     TaskAnalysis,
     VerifierSpec,
     VerifierTemplate,
+    VerifierValueEstimate,
     to_jsonable,
     tuple_of_strings,
 )
@@ -38,6 +43,8 @@ class FeedbackGraphBuilder(Protocol):
         config: GraftConfig,
         *,
         config_path: Path,
+        producer_evidence: ProducerEvidenceSummary | None = None,
+        promotion: PromotionRequirement | None = None,
     ) -> FeedbackGraph: ...
 
 
@@ -54,9 +61,17 @@ class CodexFeedbackGraphBuilder:
         config: GraftConfig,
         *,
         config_path: Path,
+        producer_evidence: ProducerEvidenceSummary | None = None,
+        promotion: PromotionRequirement | None = None,
     ) -> FeedbackGraph:
-        analysis_raw = self._run_structured(
-            _behavior_prompt(snapshot, requirements),
+        analysis_raw, behavior_cost = self._run_structured(
+            _behavior_prompt(
+                snapshot,
+                requirements,
+                producer_evidence,
+                value_aware=config.selection.strategy == "value-aware",
+                promotion=promotion,
+            ),
             snapshot,
             requirements,
             config_path,
@@ -66,8 +81,16 @@ class CodexFeedbackGraphBuilder:
         )
         analysis = _parse_task_analysis(analysis_raw)
 
-        plan_raw = self._run_structured(
-            _planner_prompt(snapshot, requirements, analysis, config.verifier_templates),
+        plan_raw, planner_cost = self._run_structured(
+            _planner_prompt(
+                snapshot,
+                requirements,
+                analysis,
+                config.verifier_templates,
+                producer_evidence,
+                value_aware=config.selection.strategy == "value-aware",
+                promotion=promotion,
+            ),
             snapshot,
             requirements,
             config_path,
@@ -76,7 +99,11 @@ class CodexFeedbackGraphBuilder:
             schema_name="verifier_plan.schema.json",
         )
         verifiers, blind_spots, gaps = _parse_verifier_plan(
-            plan_raw, analysis, config.verifier_templates
+            plan_raw,
+            analysis,
+            config.verifier_templates,
+            require_value_estimates=config.selection.strategy == "value-aware",
+            require_promotion=promotion is not None,
         )
         uncertainties = tuple(
             dict.fromkeys(
@@ -100,6 +127,10 @@ class CodexFeedbackGraphBuilder:
             verifiers=verifiers,
             shared_blind_spots=blind_spots,
             uncertainties=uncertainties,
+            producer_evidence=producer_evidence,
+            stage_costs=(behavior_cost, planner_cost),
+            promotion=promotion,
+            method=config.method,
         )
 
     def _run_structured(
@@ -112,7 +143,7 @@ class CodexFeedbackGraphBuilder:
         *,
         stage: ModelStageConfig,
         schema_name: str,
-    ) -> Mapping[str, Any]:
+    ) -> tuple[Mapping[str, Any], StageCost]:
         schema = Path(str(files("graft").joinpath("resources", schema_name)))
         try:
             turn = self.codex_runner.start_thread(
@@ -156,11 +187,18 @@ class CodexFeedbackGraphBuilder:
             raise FeedbackGraphBuildError(
                 f"Read-only model stage {stage.prompt_family} changed the producer workspace"
             )
-        return raw
+        return raw, stage_cost_from_turn(
+            stage.prompt_family, "modeling", turn
+        )
 
 
 def _behavior_prompt(
-    snapshot: SourceSnapshot, requirements: tuple[str, ...]
+    snapshot: SourceSnapshot,
+    requirements: tuple[str, ...],
+    producer_evidence: ProducerEvidenceSummary | None = None,
+    *,
+    value_aware: bool = False,
+    promotion: PromotionRequirement | None = None,
 ) -> str:
     requirements_text = "\n".join(f"- {item}" for item in requirements) or "- <missing>"
     changed = _candidate_changed_files(snapshot)
@@ -172,7 +210,21 @@ def _behavior_prompt(
     if changed == ():
         changed_text = "- <none>"
     baseline_diff = baseline_diff_excerpt(snapshot)
-    return f"""You are the structured Behavior and Failure-Mode constructor for GRAFT Original.
+    evidence_section = (
+        "\nProducer evidence already collected in this task epoch "
+        "(observations only, never a new contract):\n"
+        + _producer_evidence_text(producer_evidence)
+        if producer_evidence is not None
+        else ""
+    )
+    promotion_section = (
+        "\nPrior GRAFT feedback awaiting safe promotion (prior evidence is not a new contract):\n"
+        + json.dumps(to_jsonable(promotion), ensure_ascii=False, indent=2)
+        if promotion is not None
+        else ""
+    )
+    method_label = "GRAFT value-aware" if value_aware else "GRAFT Original"
+    return f"""You are the structured Behavior and Failure-Mode constructor for {method_label}.
 
 Model the current task, not a generic programming checklist. Read the raw user requirements below,
 inspect the observable repository state and current working-tree changes, and identify what must be
@@ -203,6 +255,8 @@ Files added or modified after the task baseline (non-authoritative as contract s
 
 Immutable baseline-to-candidate diff (implementation evidence only; never a new contract source):
 {baseline_diff}
+{evidence_section}
+{promotion_section}
 
 Use stable short identifiers. Scores are risk factors in [0,1]; Failure Mode risk may be in [0,2].
 Return only the schema-conforming object.
@@ -229,6 +283,10 @@ def _planner_prompt(
     requirements: tuple[str, ...],
     analysis: TaskAnalysis,
     templates: tuple[VerifierTemplate, ...],
+    producer_evidence: ProducerEvidenceSummary | None = None,
+    *,
+    value_aware: bool = False,
+    promotion: PromotionRequirement | None = None,
 ) -> str:
     requirements_text = "\n".join(f"- {item}" for item in requirements) or "- <missing>"
     template_payload = [
@@ -243,7 +301,34 @@ def _planner_prompt(
         }
         for item in templates
     ]
-    return f"""You are the verifier-registry retriever for GRAFT Original.
+    value_instructions = ""
+    evidence_section = ""
+    if value_aware:
+        value_instructions = """
+For each candidate, also estimate actionability, probability that the producer can repair a valid
+finding correctly, regression risk from likely repair, overlap with producer evidence, estimate
+confidence, expected duration, and expected model cost when applicable. These estimates must be
+task-conditional and conservative. They are decision estimates, not correctness evidence.
+"""
+        evidence_section = (
+            "\nProducer evidence already collected in this task epoch:\n"
+            + _producer_evidence_text(producer_evidence)
+        )
+    promotion_instructions = ""
+    promotion_section = ""
+    if promotion is not None:
+        promotion_instructions = """
+At least one candidate MUST set revalidates_feedback=true. Its objective must re-run the prior
+reproduction when available, determine whether the evidenced failure is fixed, and check that the
+raw behaviors named in the prior packet remain preserved. It must use an executable evidence
+capability in a disposable workspace; a source-only opinion cannot promote the repaired candidate.
+"""
+        promotion_section = (
+            "\nPrior feedback promotion packet:\n"
+            + json.dumps(to_jsonable(promotion), ensure_ascii=False, indent=2)
+        )
+    method_label = "GRAFT value-aware" if value_aware else "GRAFT Original"
+    return f"""You are the verifier-registry retriever for {method_label}.
 
 Create a rich task-specific candidate pool by instantiating only the general verifier templates
 provided below. Do not choose the final budgeted subset; GRAFT will do that. Each candidate must
@@ -264,6 +349,8 @@ plan MUST contain at least one shared_blind_spots entry covering the affected gr
 plan with shared model/context lineage is invalid. The repository-evidence agent discovers
 applicable project-owned commands later inside its sandboxed disposable copy; the planner must not
 emit commands or task-specific hardcoded fixtures.
+{value_instructions}
+{promotion_instructions}
 
 Raw requirements:
 {requirements_text}
@@ -275,9 +362,19 @@ Task model:
 
 General verifier templates:
 {json.dumps(template_payload, ensure_ascii=False, indent=2)}
+{evidence_section}
+{promotion_section}
 
 Return only the schema-conforming object.
 """
+
+
+def _producer_evidence_text(
+    producer_evidence: ProducerEvidenceSummary | None,
+) -> str:
+    if producer_evidence is None or producer_evidence.event_count == 0:
+        return "<none captured>"
+    return json.dumps(to_jsonable(producer_evidence), ensure_ascii=False, indent=2)
 
 
 def _parse_task_analysis(raw: Mapping[str, Any]) -> TaskAnalysis:
@@ -347,6 +444,9 @@ def _parse_verifier_plan(
     raw: Mapping[str, Any],
     analysis: TaskAnalysis,
     templates: tuple[VerifierTemplate, ...],
+    *,
+    require_value_estimates: bool = False,
+    require_promotion: bool = False,
 ) -> tuple[tuple[VerifierSpec, ...], tuple[SharedBlindSpot, ...], tuple[str, ...]]:
     by_template = {item.template_id: item for item in templates}
     failure_ids = {item.failure_mode_id for item in analysis.failure_modes}
@@ -421,31 +521,51 @@ def _parse_verifier_plan(
                 else template.lineage.oracle
             ),
         )
-        verifiers.append(
-            VerifierSpec(
-                verifier_id=identifier,
-                kind=template.kind,
-                cost=template.cost,
-                blocking=template.blocking,
-                failure_modes=targets,
-                template_id=template.template_id,
-                objective=str(item["objective"]),
-                prompt=str(item["prompt"]),
-                estimated_detection=detection,
-                timeout_s=template.timeout_s,
-                sandbox=template.sandbox,
-                network_access=template.network_access,
-                isolation=template.isolation,
-                model=template.model,
-                command=template.command,
-                failure_exit_codes=template.failure_exit_codes,
-                working_directory=template.working_directory,
-                lineage=lineage,
+        raw_value = item.get("value_estimate")
+        if require_value_estimates and not isinstance(raw_value, Mapping):
+            raise FeedbackGraphBuildError(
+                f"verifier {identifier} requires a value_estimate"
             )
+        value_estimate = _parse_value_estimate(raw_value, identifier)
+        candidate = VerifierSpec(
+            verifier_id=identifier,
+            kind=template.kind,
+            cost=template.cost,
+            blocking=template.blocking,
+            failure_modes=targets,
+            template_id=template.template_id,
+            objective=str(item["objective"]),
+            prompt=str(item["prompt"]),
+            estimated_detection=detection,
+            timeout_s=template.timeout_s,
+            sandbox=template.sandbox,
+            network_access=template.network_access,
+            isolation=template.isolation,
+            model=template.model,
+            command=template.command,
+            failure_exit_codes=template.failure_exit_codes,
+            working_directory=template.working_directory,
+            lineage=lineage,
+            value_estimate=value_estimate,
+            revalidates_feedback=bool(item.get("revalidates_feedback", False)),
         )
+        if candidate.revalidates_feedback and (
+            not candidate.blocking
+            or candidate.kind not in {"codex_agent", "command"}
+            or candidate.isolation != "temporary-copy"
+        ):
+            raise FeedbackGraphBuildError(
+                f"promotion verifier {identifier} must be blocking, executable, and isolated "
+                "in a temporary copy"
+            )
+        verifiers.append(candidate)
         verifier_ids.add(identifier)
     if not verifiers:
         raise FeedbackGraphBuildError("verifier planner returned no candidates")
+    if require_promotion and not any(item.revalidates_feedback for item in verifiers):
+        raise FeedbackGraphBuildError(
+            "verifier planner omitted the required prior-feedback revalidation candidate"
+        )
 
     blind_spots: list[SharedBlindSpot] = []
     scenario_ids: set[str] = set()
@@ -499,6 +619,49 @@ def _probability(value: Any, label: str) -> float:
     if not 0 <= parsed <= 1:
         raise FeedbackGraphBuildError(f"{label} is outside [0,1]")
     return parsed
+
+
+def _parse_value_estimate(
+    raw: Any, verifier_id: str
+) -> VerifierValueEstimate:
+    if not isinstance(raw, Mapping):
+        return VerifierValueEstimate()
+    duration = raw.get("predicted_duration_s")
+    predicted_duration = float(duration) if duration is not None else None
+    if predicted_duration is not None and predicted_duration <= 0:
+        raise FeedbackGraphBuildError(
+            f"{verifier_id}.value_estimate.predicted_duration_s must be positive"
+        )
+    model_cost = raw.get("predicted_model_cost_usd")
+    predicted_cost = float(model_cost) if model_cost is not None else None
+    if predicted_cost is not None and predicted_cost < 0:
+        raise FeedbackGraphBuildError(
+            f"{verifier_id}.value_estimate.predicted_model_cost_usd must be non-negative"
+        )
+    return VerifierValueEstimate(
+        actionability=_probability(
+            raw.get("actionability", 0.0),
+            f"{verifier_id}.value_estimate.actionability",
+        ),
+        repair_success=_probability(
+            raw.get("repair_success", 0.0),
+            f"{verifier_id}.value_estimate.repair_success",
+        ),
+        regression_risk=_probability(
+            raw.get("regression_risk", 1.0),
+            f"{verifier_id}.value_estimate.regression_risk",
+        ),
+        producer_evidence_overlap=_probability(
+            raw.get("producer_evidence_overlap", 1.0),
+            f"{verifier_id}.value_estimate.producer_evidence_overlap",
+        ),
+        confidence=_probability(
+            raw.get("confidence", 0.0),
+            f"{verifier_id}.value_estimate.confidence",
+        ),
+        predicted_duration_s=predicted_duration,
+        predicted_model_cost_usd=predicted_cost,
+    )
 
 
 def _turn_error(events: tuple[Mapping[str, Any], ...]) -> str:
