@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shlex
 import sys
 import tarfile
 import tempfile
@@ -26,6 +27,25 @@ from graft.schema import (
     VerifierSpec,
     VerifierValueEstimate,
 )
+
+
+class RepositoryHookConfigurationTests(unittest.TestCase):
+    def test_commands_pass_the_required_event_argument(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        configured_hooks = json.loads(
+            (project_root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        )["hooks"]
+        expected_events = {
+            "UserPromptSubmit": "user-prompt",
+            "PostToolUse": "post-tool",
+            "Stop": "stop",
+        }
+
+        for hook_name, event in expected_events.items():
+            command = configured_hooks[hook_name][0]["hooks"][0]["command"]
+            arguments = shlex.split(command)
+            self.assertIn(event, arguments)
+            self.assertLess(arguments.index(event), arguments.index("--installation-id"))
 
 
 class HookReplayTests(unittest.TestCase):
