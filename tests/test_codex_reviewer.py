@@ -19,6 +19,7 @@ from graft.schema import (
     Verdict,
 )
 from graft.verifiers import VerifierExecutor, _command_fingerprints
+from graft.verifiers import _verifier_prompt
 
 
 class EvidenceRunner:
@@ -73,6 +74,43 @@ class EvidenceRunner:
 
 
 class CodexReviewerTests(unittest.TestCase):
+    def test_verifier_prompt_requires_exact_standalone_reproduction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            config_path = root / "config.json"
+            config_path.write_text('{"version": 2}\n', encoding="utf-8")
+            source = freeze_source(root, requirements=("Keep value correct",))
+            failure = FailureMode("f", "b", "value is wrong", "runtime", (), (), 1)
+            spec = VerifierSpec(
+                verifier_id="evidence-agent",
+                kind="codex_agent",
+                cost=1,
+                blocking=True,
+                failure_modes=("f",),
+                objective="exercise the value",
+                prompt="derive a runtime check",
+                isolation="temporary-copy",
+            )
+            graph = FeedbackGraph(
+                source.checkpoint_key,
+                (Behavior("b", "keep value correct", (), ("value",), 1, 1, 0),),
+                (failure,),
+                (spec,),
+                (),
+            )
+            prompt = _verifier_prompt(
+                spec,
+                source,
+                ("Keep value correct",),
+                graph,
+                config_path=config_path,
+                environment_fingerprint="test",
+            )
+            self.assertIn("execute a minimal reproduction", prompt)
+            self.assertIn("copy that exact executed argv", prompt)
+            self.assertIn("do not join it", prompt)
+
     def test_shell_wrappers_are_structurally_equivalent_evidence(self) -> None:
         script = "PYTHONPATH=/tmp/workspace python3 - <<'PY'\nprint('ok')\nPY"
         reported = _command_fingerprints(("bash", "-lc", script))

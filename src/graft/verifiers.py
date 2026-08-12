@@ -415,6 +415,13 @@ with its target failure_modes and one oracle_origin:
 - verifier_generated: a test, mock, stub, or oracle you created;
 - source_inspection: static/code-review reasoning only;
 - unavailable: the needed oracle could not be reached.
+A blocking finding discovered inside a multi-case harness is not yet eligible evidence. Before the
+final verdict, execute a minimal reproduction for each blocking finding as its own simple tool
+command: do not join it to setup, cleanup, another check, a pipeline, a redirection, or a second
+command. In the evidence object, copy that exact executed argv or shell payload without simplifying,
+rewriting, or substituting an equivalent command. If you cannot execute and report that exact
+standalone reproduction, mark the finding non-reproducible or abstain. GRAFT intentionally rejects
+claimed commands that do not identify an observed tool event.
 A code-review suspicion, successful source-inspection command, or generated mock/stub
 counterexample is not mechanically reproducible blocking evidence. Authoritative runtime and
 unchanged baseline evidence must name the exact failure modes plus an actually executed command or
