@@ -132,6 +132,29 @@ class CodexReviewerTests(unittest.TestCase):
             _command_fingerprints(inner) & _command_fingerprints(observed)
         )
 
+    def test_single_item_shell_payload_matches_wrapped_simple_command(self) -> None:
+        script = "print('exact payload')"
+        inner = ("python3", "-c", script)
+        payload = " ".join(shlex.quote(part) for part in inner)
+        reported = (payload,)
+        observed = "/bin/zsh -lc " + shlex.quote(payload)
+        self.assertTrue(
+            _command_fingerprints(reported) & _command_fingerprints(observed)
+        )
+
+    def test_single_item_compound_payload_does_not_match_inner_command(self) -> None:
+        script = "print('claimed')"
+        inner = ("python3", "-c", script)
+        payload = "echo setup && " + " ".join(shlex.quote(part) for part in inner)
+        reported = (payload,)
+        observed = "/bin/zsh -lc " + shlex.quote(payload)
+        self.assertFalse(
+            _command_fingerprints(inner) & _command_fingerprints(reported)
+        )
+        self.assertFalse(
+            _command_fingerprints(reported) & _command_fingerprints(observed)
+        )
+
     def test_compound_shell_command_does_not_promote_inner_command(self) -> None:
         script = "print('claimed')"
         inner = ("python3", "-c", script)

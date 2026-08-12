@@ -637,6 +637,12 @@ def _command_fingerprints(
         parts = tuple(str(part) for part in command)
     if not parts:
         return frozenset()
+    if len(parts) == 1 and any(character.isspace() for character in parts[0]):
+        # The verdict schema permits either argv or a shell payload but encodes
+        # both as an array of strings. Models sometimes emit one exact payload
+        # as ``["python3 -c '...'"]``. Treat only that unambiguous single-item
+        # representation as shell text; a genuine argv list remains unchanged.
+        return _command_fingerprints(parts[0], _unwrap_depth=_unwrap_depth)
 
     executable = Path(parts[0]).name
     normalized_parts = (executable, *parts[1:])
