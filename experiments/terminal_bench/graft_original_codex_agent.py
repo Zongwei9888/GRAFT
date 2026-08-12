@@ -23,6 +23,7 @@ class GraftOriginalCodex(NativeCodex):
     GRAFT_REPOSITORY = "https://github.com/Zongwei9888/GRAFT.git"
     GRAFT_COMMIT = "2ecea330faa0fce9b4e86688d831f22d73d80ace"
     GRAFT_SOURCE = "/opt/graft-original-v0.5.0"
+    GRAFT_SOURCE_MARKER = "/opt/graft-original-v0.5.0.commit"
     REMOTE_CODEX_HOME = "/tmp/codex-home"
     GRAFT_CONFIG_HOME = "/logs/agent/graft-config"
     GRAFT_STATE_HOME = "/logs/agent/graft-state"
@@ -59,21 +60,18 @@ class GraftOriginalCodex(NativeCodex):
         await self.exec_as_root(
             environment,
             command=(
-                "apt-get update && "
-                "DEBIAN_FRONTEND=noninteractive apt-get install -y git && "
-                "rm -rf /var/lib/apt/lists/*"
-            ),
-        )
-        await self.exec_as_root(
-            environment,
-            command=(
-                f"rm -rf {shlex.quote(self.GRAFT_SOURCE)} && "
-                f"git clone {shlex.quote(self.GRAFT_REPOSITORY)} "
+                "archive=/tmp/graft-source.tar.gz && "
+                f"rm -rf {shlex.quote(self.GRAFT_SOURCE)} "
+                f"{shlex.quote(self.GRAFT_SOURCE_MARKER)} \"$archive\" && "
+                f"mkdir -p {shlex.quote(self.GRAFT_SOURCE)} && "
+                "curl --fail --location --retry 3 --output \"$archive\" "
+                f"{shlex.quote(self.GRAFT_REPOSITORY.removesuffix('.git') + '/archive/' + self.graft_commit + '.tar.gz')} && "
+                f"tar -xzf \"$archive\" --strip-components=1 -C "
                 f"{shlex.quote(self.GRAFT_SOURCE)} && "
-                f"git -C {shlex.quote(self.GRAFT_SOURCE)} checkout --detach "
-                f"{shlex.quote(self.graft_commit)} && "
-                f"test \"$(git -C {shlex.quote(self.GRAFT_SOURCE)} rev-parse HEAD)\" = "
-                f"{shlex.quote(self.graft_commit)}"
+                f"test -f {shlex.quote(self.GRAFT_SOURCE + '/.codex-plugin/plugin.json')} && "
+                f"printf '%s\\n' {shlex.quote(self.graft_commit)} > "
+                f"{shlex.quote(self.GRAFT_SOURCE_MARKER)} && "
+                "rm -f \"$archive\""
             ),
         )
         # Harbor already executes Codex in a disposable Docker environment. The
@@ -106,8 +104,6 @@ class GraftOriginalCodex(NativeCodex):
             (
                 (
                     "if [ -s ~/.nvm/nvm.sh ]; then . ~/.nvm/nvm.sh; fi; "
-                    f"git config --global --add safe.directory "
-                    f"{shlex.quote(self.GRAFT_SOURCE)} && "
                     f"mkdir -p {shlex.quote(self.REMOTE_CODEX_HOME)} "
                     f"{shlex.quote(self.GRAFT_CONFIG_HOME)} "
                     f"{shlex.quote(self.GRAFT_STATE_HOME)} "
@@ -115,7 +111,7 @@ class GraftOriginalCodex(NativeCodex):
                     f"{shlex.quote(agent_dir)}"
                 ),
                 (
-                    f"git -C {shlex.quote(self.GRAFT_SOURCE)} rev-parse HEAD > "
+                    f"cat {shlex.quote(self.GRAFT_SOURCE_MARKER)} > "
                     f"{shlex.quote(agent_dir + '/graft-source-commit.txt')}"
                 ),
                 (
