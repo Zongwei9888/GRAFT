@@ -248,6 +248,36 @@ class TerminalBenchExperimentTests(unittest.TestCase):
         self.assertNotIn("hidden", source.lower())
         self.assertNotIn("/app/.graft", source)
 
+    def test_value_aware_wal_pilot_is_source_pinned_and_matched(self) -> None:
+        graft_path = (
+            EXPERIMENT_ROOT
+            / "configs"
+            / "wal-recovery-ordering-value-aware-r10.json"
+        )
+        native_path = (
+            EXPERIMENT_ROOT / "configs" / "wal-recovery-ordering-native-r10.json"
+        )
+        graft = json.loads(graft_path.read_text(encoding="utf-8"))
+        native = json.loads(native_path.read_text(encoding="utf-8"))
+        self.assertEqual(graft["datasets"], native["datasets"])
+        self.assertEqual(
+            graft["datasets"][0]["task_names"],
+            ["terminal-bench/wal-recovery-ordering"],
+        )
+        self.assertTrue(graft["datasets"][0]["ref"].startswith("sha256:"))
+        self.assertEqual(
+            graft["agents"][0]["model_name"], native["agents"][0]["model_name"]
+        )
+        for field in ("version", "reasoning_effort"):
+            self.assertEqual(
+                graft["agents"][0]["kwargs"][field],
+                native["agents"][0]["kwargs"][field],
+            )
+        self.assertEqual(
+            graft["agents"][0]["kwargs"]["graft_commit"],
+            "692e75660f707711dbfaf8cbc8fd7d5f72c709ff",
+        )
+
     def test_auth_ownership_fix_is_shared_by_native_and_treatment(self) -> None:
         native_source = (EXPERIMENT_ROOT / "graft_codex_agent.py").read_text(
             encoding="utf-8"
