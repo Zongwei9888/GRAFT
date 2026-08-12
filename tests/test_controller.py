@@ -52,7 +52,16 @@ class GraphBuilder:
     def __init__(self, *, uncertainties: tuple[str, ...] = ()) -> None:
         self.uncertainties = uncertainties
 
-    def build(self, snapshot, requirements, config, *, config_path):
+    def build(
+        self,
+        snapshot,
+        requirements,
+        config,
+        *,
+        config_path,
+        producer_evidence=None,
+        promotion=None,
+    ):
         self.requirements = requirements
         return feedback_graph(
             snapshot.checkpoint_key, uncertainties=self.uncertainties
@@ -138,6 +147,29 @@ class ControllerTests(unittest.TestCase):
             root = Path(directory)
             config = load_config(initialize_project(root).path)
             self.assertEqual(config.behavior_modeler.timeout_s, 180)
+
+    def test_exhausted_resource_budget_is_unresolved_not_noop_allow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "artifact.data").write_text("value=1\n", encoding="utf-8")
+            path = initialize_project(root, selection_policy="value-aware").path
+            controller = GraftController(
+                load_config(path),
+                config_path=path,
+                graph_builder=GraphBuilder(),
+                executor=Executor(Verdict.PASS),
+            )
+            decision = controller.verify(
+                root,
+                requirements=("keep value correct",),
+                available_wall_time_s=0,
+                available_model_cost_usd=1,
+            )
+            self.assertEqual(decision.kind, DecisionKind.UNRESOLVED)
+            self.assertIsNotNone(decision.selection)
+            self.assertFalse(decision.selection.feasible)
+            self.assertFalse(decision.selection.no_op)
+            self.assertIn("did not make a No-Op value judgment", decision.reason)
 
     def test_passing_dynamic_verifier_allows_when_residual_is_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

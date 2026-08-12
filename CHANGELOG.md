@@ -39,6 +39,9 @@ All notable changes follow semantic versioning.
   actually executed, while retaining exact argv/payload matching rather than substring promotion;
 - add evaluator-only first-Stop checkpoint replay and record the prospective
   `embedding-drift-monitor` zero-benefit result.
+- make every Codex structured-output schema strict-compatible and cover the contract recursively;
+- distinguish an evaluated value-aware No-Op from an empty selection caused by exhausted resource
+  budget, treating the latter as unresolved instead of allowing the checkpoint.
 
 ## 0.5.0 - 2026-08-10
 

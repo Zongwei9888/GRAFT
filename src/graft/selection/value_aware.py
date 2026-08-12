@@ -29,18 +29,23 @@ class ValueAwareSelector:
         remaining = list(candidates)
         evaluated = 0
         marginal_values: dict[str, float] = {}
+        feasible_singletons = tuple(
+            item
+            for item in candidates
+            if item.cost <= budget + 1e-12
+            and _fits_resource_budget(
+                item,
+                available_wall_time_s=available_wall_time_s,
+                available_model_cost_usd=available_model_cost_usd,
+            )
+        )
 
         if graph.promotion is not None:
             required = tuple(item for item in candidates if item.revalidates_feedback)
             feasible_required = tuple(
                 item
                 for item in required
-                if item.cost <= budget + 1e-12
-                and _fits_resource_budget(
-                    item,
-                    available_wall_time_s=available_wall_time_s,
-                    available_model_cost_usd=available_model_cost_usd,
-                )
+                if item in feasible_singletons
             )
             if not feasible_required:
                 return Selection(
@@ -66,6 +71,20 @@ class ValueAwareSelector:
             selected = (chosen,)
             remaining.remove(chosen)
             marginal_values[chosen.verifier_id] = chosen_net
+
+        if not feasible_singletons:
+            return Selection(
+                verifier_ids=(),
+                expected_utility=0.0,
+                expected_coverage=0.0,
+                residual_risk=1.0,
+                total_cost=0.0,
+                feasible=False,
+                evaluated_candidates=0,
+                policy="value-aware",
+                net_value=0.0,
+                no_op=False,
+            )
 
         while remaining and len(selected) < policy.max_verifiers:
             current_net, _, _ = expected_net_value(graph, selected, budget, policy)
@@ -102,15 +121,7 @@ class ValueAwareSelector:
 
         best_singleton: tuple[VerifierSpec, ...] = ()
         best_singleton_net = 0.0
-        for candidate in candidates:
-            if candidate.cost > budget + 1e-12:
-                continue
-            if not _fits_resource_budget(
-                candidate,
-                available_wall_time_s=available_wall_time_s,
-                available_model_cost_usd=available_model_cost_usd,
-            ):
-                continue
+        for candidate in feasible_singletons:
             net, _, _ = expected_net_value(graph, (candidate,), budget, policy)
             evaluated += 1
             if (

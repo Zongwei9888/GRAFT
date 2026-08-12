@@ -1,0 +1,956 @@
+{
+  "analysis_type": "posthoc_execution_free_resource_diagnostic",
+  "input_result": "./experiments/value_aware_gate/results/m2_selector_pilot.json",
+  "checkpoint": "166539c6a22ff69aaf0481fa556c47f8ffc84a32fe7a201c994bc61da7eecb3f",
+  "graph_stage_wall_time_s": 177.8982889589388,
+  "configured_task_epoch_wall_time_s": 120.0,
+  "remaining_wall_time_s": 0.0,
+  "intrinsic_no_resource_gate": {
+    "verifier_ids": [],
+    "expected_utility": 0.0,
+    "expected_coverage": 0.0,
+    "residual_risk": 1.0,
+    "total_cost": 0,
+    "feasible": true,
+    "evaluated_candidates": 14,
+    "policy": "value-aware",
+    "net_value": 0.0,
+    "no_op": true,
+    "marginal_values": {}
+  },
+  "verifier_only_resource_gate": {
+    "verifier_ids": [],
+    "expected_utility": 0.0,
+    "expected_coverage": 0.0,
+    "residual_risk": 1.0,
+    "total_cost": 0,
+    "feasible": true,
+    "evaluated_candidates": 14,
+    "policy": "value-aware",
+    "net_value": 0.0,
+    "no_op": true,
+    "marginal_values": {}
+  },
+  "post_fix_after_graph_resource_gate": {
+    "verifier_ids": [],
+    "expected_utility": 0.0,
+    "expected_coverage": 0.0,
+    "residual_risk": 1.0,
+    "total_cost": 0.0,
+    "feasible": false,
+    "evaluated_candidates": 0,
+    "policy": "value-aware",
+    "net_value": 0.0,
+    "no_op": false,
+    "marginal_values": {}
+  },
+  "post_fix_controller_decision": {
+    "kind": "unresolved",
+    "reason": "No verifier was feasible inside the remaining task-epoch resource budget. GRAFT did not make a No-Op value judgment for this checkpoint.",
+    "snapshot": {
+      "root": "<producer-workspace>",
+      "tree_hash": "2474bbc348ab8cf9a006618abdec6198a6c2f2131a0acfe7412cfa7d2e4bc2a5",
+      "requirement_hash": "520989f4649b23509ebc094de4bd55d703389f91baab831af1c4e056205f4337",
+      "config_hash": "c2b33bc26ecd0b9835f93d2b6f476498dd1f840de4da47e2a76dfc4b2b80af50",
+      "checkpoint_key": "166539c6a22ff69aaf0481fa556c47f8ffc84a32fe7a201c994bc61da7eecb3f",
+      "files": [
+        ".gitignore",
+        "README.md",
+        "aggregate.py",
+        "test_aggregate.py"
+      ],
+      "created_at": "2026-08-12T07:00:02.182800+00:00",
+      "baseline_tree_hash": "9425003a8b74b56f5150dcdcf93127616d3d7231e7593b09b1693abdfb22bb44",
+      "baseline_files": [
+        ".gitignore"
+      ],
+      "file_hashes": {
+        ".gitignore": "427177f5efe3df0583fd8e1fcfee0e0022a2e363394a0e123567f473058d0156",
+        "README.md": "e191bdda455ab41bb95a64f55e6c1775f7733c79c8bd89267fa940d2f7ee2b01",
+        "aggregate.py": "a061af81ad2e1f9a34623f33d76650d96b4dd36c26fabe76914c3b119a9aa6e4",
+        "test_aggregate.py": "e0e009dc74da22ea04574cfbc5657edff99913d44ec89593adb4570d7cdf3f1f"
+      },
+      "baseline_file_hashes": {
+        ".gitignore": "427177f5efe3df0583fd8e1fcfee0e0022a2e363394a0e123567f473058d0156"
+      },
+      "baseline_archive_path": "./experiments/value_aware_gate/frozen_inputs/baseline.tar.gz"
+    },
+    "graph": {
+      "source_hash": "166539c6a22ff69aaf0481fa556c47f8ffc84a32fe7a201c994bc61da7eecb3f",
+      "behaviors": [
+        {
+          "behavior_id": "B1",
+          "description": "Read UTF-8 JSON Lines from standard input and ignore empty or whitespace-only lines.",
+          "source_refs": [
+            "Raw requirements: reads UTF-8 JSON Lines from stdin; ignore empty or whitespace-only lines"
+          ],
+          "observables": [
+            "Blank-only input records do not affect totals",
+            "Valid non-ASCII UTF-8 keys are accepted",
+            "Empty input produces the aggregate of zero records"
+          ],
+          "severity": 0.8,
+          "likelihood": 0.8,
+          "reach": 0.9
+        },
+        {
+          "behavior_id": "B2",
+          "description": "Require every nonblank line to be a JSON object containing exactly the fields key and delta, where key is a string and delta is an integer but not a boolean.",
+          "source_refs": [
+            "Raw requirements: every other line must be a JSON object with exactly two fields: string key and integer delta; booleans are not integers"
+          ],
+          "observables": [
+            "Objects missing key or delta are rejected",
+            "Objects with extra fields are rejected",
+            "Arrays, scalars, malformed JSON, non-string keys, floats, strings, nulls, and boolean deltas are rejected"
+          ],
+          "severity": 1.0,
+          "likelihood": 0.9,
+          "reach": 1.0
+        },
+        {
+          "behavior_id": "B3",
+          "description": "Sum all accepted delta values independently by their key, including negative and repeated deltas.",
+          "source_refs": [
+            "Raw requirements: sum deltas by key"
+          ],
+          "observables": [
+            "Repeated keys produce one total",
+            "Different keys remain independent",
+            "Negative and zero deltas participate in ordinary integer addition"
+          ],
+          "severity": 1.0,
+          "likelihood": 0.9,
+          "reach": 1.0
+        },
+        {
+          "behavior_id": "B4",
+          "description": "On valid input, emit exactly one compact JSON object whose keys are lexicographically sorted, followed by exactly one newline.",
+          "source_refs": [
+            "Raw requirements: write one JSON object with keys sorted lexicographically and compact separators, followed by one newline"
+          ],
+          "observables": [
+            "Output contains no spaces introduced by JSON separators",
+            "Key ordering is lexicographic",
+            "Empty input emits '{}\\n'",
+            "Successful output is valid JSON and has exactly one trailing newline"
+          ],
+          "severity": 0.9,
+          "likelihood": 0.9,
+          "reach": 1.0
+        },
+        {
+          "behavior_id": "B5",
+          "description": "For any specified invalid input, emit no stdout, emit one concise stderr line, and exit with status 2, even when invalid data follows valid records.",
+          "source_refs": [
+            "Raw requirements: on malformed JSON, a non-object, missing or extra fields, or wrong field types, write no stdout, write one concise stderr line, and exit 2"
+          ],
+          "observables": [
+            "Exit status is exactly 2",
+            "Stdout is empty",
+            "Stderr consists of one concise newline-terminated line",
+            "No partial aggregate is emitted before the entire input has been validated"
+          ],
+          "severity": 1.0,
+          "likelihood": 0.8,
+          "reach": 1.0
+        },
+        {
+          "behavior_id": "B6",
+          "description": "Implement aggregate.py without third-party dependencies or network access.",
+          "source_refs": [
+            "Raw requirements: create a dependency-free command-line program aggregate.py",
+            "Raw requirements: do not use the network"
+          ],
+          "observables": [
+            "Program runs using the language runtime and standard library only",
+            "Program performs no network operations"
+          ],
+          "severity": 0.7,
+          "likelihood": 0.9,
+          "reach": 0.8
+        },
+        {
+          "behavior_id": "B7",
+          "description": "Provide automated tests that exercise the task-specific success and rejection behavior.",
+          "source_refs": [
+            "Raw requirements: add automated tests"
+          ],
+          "observables": [
+            "Repository contains runnable automated tests",
+            "Tests cover aggregation, ordering, compact output, blank lines, UTF-8, invalid structures and types, boolean rejection, and no-stdout error handling"
+          ],
+          "severity": 0.7,
+          "likelihood": 0.9,
+          "reach": 0.8
+        },
+        {
+          "behavior_id": "B8",
+          "description": "Provide a README explaining program usage and the input, output, and error contract.",
+          "source_refs": [
+            "Raw requirements: add a README with usage"
+          ],
+          "observables": [
+            "README includes an invocation example",
+            "README describes required fields and types, output format, and invalid-input behavior",
+            "README states how to run tests"
+          ],
+          "severity": 0.5,
+          "likelihood": 0.9,
+          "reach": 0.7
+        },
+        {
+          "behavior_id": "B9",
+          "description": "Run the automated tests before reporting the implementation ready.",
+          "source_refs": [
+            "Raw requirements: run the tests before reporting the implementation ready",
+            "Producer evidence: python3 -m unittest -v succeeded",
+            "Repository inspection: python3 -m unittest -v ran 5 tests successfully"
+          ],
+          "observables": [
+            "A test execution is recorded for the candidate state",
+            "All discovered tests pass before readiness is claimed"
+          ],
+          "severity": 0.7,
+          "likelihood": 1.0,
+          "reach": 0.8
+        }
+      ],
+      "failure_modes": [
+        {
+          "failure_mode_id": "F1",
+          "behavior_id": "B2",
+          "description": "Duplicate JSON member names may be collapsed by the decoder, allowing a source object with repeated key or delta members to pass the exactly-two-fields check.",
+          "category": "ambiguous-input-validation",
+          "observable_signals": [
+            "Input such as '{\"key\":\"a\",\"key\":\"b\",\"delta\":1}' exits successfully",
+            "Only the last duplicate member value affects the aggregate"
+          ],
+          "required_capabilities": [
+            "Submit crafted JSON Lines input",
+            "Observe exit status and stdout"
+          ],
+          "risk": 0.8
+        },
+        {
+          "failure_mode_id": "F2",
+          "behavior_id": "B5",
+          "description": "A syntactically valid JSON integer exceeding the runtime's integer-string conversion limit can raise an uncaught ValueError, producing a traceback and exit status 1 instead of the required one-line error and status 2.",
+          "category": "unhandled-parser-exception",
+          "observable_signals": [
+            "Very long integer input exits with status other than 2",
+            "Stderr contains a Python traceback or multiple lines"
+          ],
+          "required_capabilities": [
+            "Submit an extremely long JSON integer",
+            "Observe stderr and exit status"
+          ],
+          "risk": 0.65
+        },
+        {
+          "failure_mode_id": "F3",
+          "behavior_id": "B1",
+          "description": "UTF-8 decoding depends on the process stdin text encoding; under a non-UTF-8 runtime configuration, valid UTF-8 input could be rejected or decoded incorrectly.",
+          "category": "environment-dependent-decoding",
+          "observable_signals": [
+            "Behavior changes with locale or Python UTF-8 mode",
+            "Valid non-ASCII UTF-8 bytes produce an encoding error"
+          ],
+          "required_capabilities": [
+            "Run the program under alternate locale/runtime encoding settings",
+            "Provide non-ASCII UTF-8 input"
+          ],
+          "risk": 0.35
+        },
+        {
+          "failure_mode_id": "F4",
+          "behavior_id": "B4",
+          "description": "A key containing an escaped lone surrogate can pass string validation but fail during UTF-8 output encoding, causing no valid result and an uncontrolled error.",
+          "category": "output-encoding-exception",
+          "observable_signals": [
+            "Input with a key such as \"\\ud800\" terminates abnormally",
+            "Stderr contains an encoding traceback",
+            "No required JSON output line is produced"
+          ],
+          "required_capabilities": [
+            "Submit JSON containing an escaped lone surrogate",
+            "Observe stdout, stderr, and exit status"
+          ],
+          "risk": 0.45
+        },
+        {
+          "failure_mode_id": "F5",
+          "behavior_id": "B7",
+          "description": "The automated tests do not probe duplicate-member semantics, parser resource-limit exceptions, locale-dependent decoding, or escaped-surrogate output failures.",
+          "category": "test-coverage-gap",
+          "observable_signals": [
+            "All five current tests pass while F1 through F4 remain possible",
+            "No test cases contain duplicate object members, extremely long integers, alternate locales, or escaped lone surrogates"
+          ],
+          "required_capabilities": [
+            "Inspect or run the test suite"
+          ],
+          "risk": 0.55
+        },
+        {
+          "failure_mode_id": "F6",
+          "behavior_id": "B5",
+          "description": "Deeply nested or otherwise pathological JSON can raise exceptions such as RecursionError that bypass the controlled error path, resulting in a traceback and the wrong exit status.",
+          "category": "unhandled-parser-exception",
+          "observable_signals": [
+            "Pathological input exits with status other than 2",
+            "Stderr contains multiple traceback lines"
+          ],
+          "required_capabilities": [
+            "Generate deeply nested JSON input",
+            "Observe stderr and exit status"
+          ],
+          "risk": 0.35
+        }
+      ],
+      "verifiers": [
+        {
+          "verifier_id": "repo-evidence-1",
+          "kind": "codex_agent",
+          "cost": 1.25,
+          "blocking": true,
+          "failure_modes": [
+            "F5"
+          ],
+          "template_id": "repository-evidence-agent",
+          "objective": "Discover and run the repository-declared automated-test workflow in an isolated copy, then determine whether the declared suite passes and whether its collected cases exercise the identified edge classes.",
+          "prompt": "In a disposable workspace copy, inspect project-owned documentation and tool configuration to discover the applicable direct-argv automated-test command. Run only that repository-declared command. Report exit status and concise output evidence, then inspect the collected task-specific tests for coverage of duplicate members, parser-limit exceptions, alternate decoding environments, lone-surrogate output, and pathological nesting. Do not modify the producer workspace, invent a command, or treat a passing suite as proof of uncovered behavior.",
+          "estimated_detection": {
+            "F5": 0.92
+          },
+          "timeout_s": 180.0,
+          "sandbox": "workspace-write",
+          "network_access": false,
+          "isolation": "temporary-copy",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral-copy",
+            "prompt_family": "repository-evidence-agent-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace-copy",
+              "repository-tool-declarations",
+              "task model failure-mode descriptions",
+              "project-owned README and test configuration",
+              "disposable candidate-state copy"
+            ],
+            "modality": [
+              "text",
+              "source",
+              "execution",
+              "test collection metadata",
+              "process exit status"
+            ],
+            "oracle": "repository-declared-command",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.94,
+            "repair_success": 0.9,
+            "regression_risk": 0.08,
+            "producer_evidence_overlap": 0.78,
+            "confidence": 0.88,
+            "predicted_duration_s": 35.0,
+            "predicted_model_cost_usd": 0.08
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "repo-evidence-2",
+          "kind": "codex_agent",
+          "cost": 1.25,
+          "blocking": true,
+          "failure_modes": [
+            "F2",
+            "F6"
+          ],
+          "template_id": "repository-evidence-agent",
+          "objective": "Use a separately discovered repository-owned validation workflow to obtain deterministic evidence about controlled error handling, without substituting planner-authored tests.",
+          "prompt": "In a fresh disposable copy, independently inspect repository-owned documentation and tool declarations and discover a task-relevant direct-argv validation or test command. Run only a command actually declared by the repository. Report whether its evidence establishes exit status 2, empty stdout, and single-line stderr for parser exceptions involving integer conversion limits or pathological nesting. If no declared command covers these cases, report the capability gap rather than generating fixtures or commands.",
+          "estimated_detection": {
+            "F2": 0.12,
+            "F6": 0.1
+          },
+          "timeout_s": 180.0,
+          "sandbox": "workspace-write",
+          "network_access": false,
+          "isolation": "temporary-copy",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral-copy",
+            "prompt_family": "repository-evidence-agent-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace-copy",
+              "repository-tool-declarations",
+              "task model error contract",
+              "repository-owned command declarations",
+              "fresh disposable candidate-state copy"
+            ],
+            "modality": [
+              "text",
+              "source",
+              "execution",
+              "process streams",
+              "process exit status"
+            ],
+            "oracle": "repository-declared-command",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.72,
+            "repair_success": 0.83,
+            "regression_risk": 0.15,
+            "producer_evidence_overlap": 0.7,
+            "confidence": 0.64,
+            "predicted_duration_s": 30.0,
+            "predicted_model_cost_usd": 0.07
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "semantic-review-1",
+          "kind": "codex_review",
+          "cost": 1.0,
+          "blocking": false,
+          "failure_modes": [
+            "F1",
+            "F4"
+          ],
+          "template_id": "semantic-reviewer",
+          "objective": "Resolve or preserve the two explicit semantic ambiguities and identify any source-level mismatch without converting an unsupported interpretation into Stop feedback.",
+          "prompt": "Review the raw requirements, unchanged baseline authority if present, candidate source, tests, and diff. Analyze whether exactly two fields forbids duplicate JSON member names and whether an escaped lone surrogate is a valid required string key. For each branch, cite the authority that selects it or explicitly mark it unresolved. Inspect implementation behavior, but keep findings advisory unless raw requirements or unchanged baseline evidence selects a hypothesis. Recommend a single distinguishing runtime observation for each unresolved branch; do not claim that observation alone settles the contract.",
+          "estimated_detection": {
+            "F1": 0.0,
+            "F4": 0.0
+          },
+          "timeout_s": 120.0,
+          "sandbox": "read-only",
+          "network_access": false,
+          "isolation": "ephemeral",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral",
+            "prompt_family": "semantic-reviewer-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace",
+              "diff",
+              "task-model uncertainties",
+              "unchanged baseline files if available",
+              "candidate diff"
+            ],
+            "modality": [
+              "text",
+              "source"
+            ],
+            "oracle": "model-review",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.55,
+            "repair_success": 0.62,
+            "regression_risk": 0.35,
+            "producer_evidence_overlap": 0.28,
+            "confidence": 0.7,
+            "predicted_duration_s": 40.0,
+            "predicted_model_cost_usd": 0.12
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "semantic-review-2",
+          "kind": "codex_review",
+          "cost": 1.0,
+          "blocking": false,
+          "failure_modes": [
+            "F2",
+            "F3",
+            "F5",
+            "F6"
+          ],
+          "template_id": "semantic-reviewer",
+          "objective": "Audit requirement-to-implementation and requirement-to-test traceability, emphasizing uncontrolled exceptions, UTF-8 semantics, and missing adversarial coverage.",
+          "prompt": "Inspect the raw requirements, observable repository state, source, tests, README, and diff. Trace the UTF-8 input contract and the required invalid-input process contract through implementation exception boundaries. Identify source-supported paths where integer conversion, decoding, or pathological parsing can escape the controlled error response. Separately assess whether automated tests cover those paths. Return precise file evidence and clearly distinguish reproducible defects from resource-limit interpretations left unspecified by the contract.",
+          "estimated_detection": {
+            "F2": 0.38,
+            "F3": 0.3,
+            "F5": 0.86,
+            "F6": 0.3
+          },
+          "timeout_s": 120.0,
+          "sandbox": "read-only",
+          "network_access": false,
+          "isolation": "ephemeral",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral",
+            "prompt_family": "semantic-reviewer-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace",
+              "diff",
+              "task behavior model",
+              "candidate source and tests",
+              "README",
+              "candidate diff"
+            ],
+            "modality": [
+              "text",
+              "source"
+            ],
+            "oracle": "model-review",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.82,
+            "repair_success": 0.78,
+            "regression_risk": 0.18,
+            "producer_evidence_overlap": 0.42,
+            "confidence": 0.73,
+            "predicted_duration_s": 50.0,
+            "predicted_model_cost_usd": 0.14
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "agentic-evidence-1",
+          "kind": "codex_agent",
+          "cost": 1.5,
+          "blocking": true,
+          "failure_modes": [
+            "F2",
+            "F6"
+          ],
+          "template_id": "agentic-evidence-reviewer",
+          "objective": "Execute bounded adversarial parser inputs against the actual CLI and capture reproducible process-contract evidence for uncaught parser exceptions.",
+          "prompt": "In a disposable workspace copy, inspect the implementation and exercise the actual aggregate.py entry point with bounded inputs designed to reach the runtime's integer-conversion limit and nesting limit. Capture the exact observed exit status and whether stdout is empty and stderr is exactly one concise line. Minimize any failing input enough to reproduce the branch reliably. Treat resource exhaustion that cannot be reproduced safely as a capability gap, and distinguish an implementation exception from operating-system termination.",
+          "estimated_detection": {
+            "F2": 0.76,
+            "F6": 0.62
+          },
+          "timeout_s": 180.0,
+          "sandbox": "workspace-write",
+          "network_access": false,
+          "isolation": "temporary-copy",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral",
+            "prompt_family": "agentic-evidence-reviewer-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace",
+              "runtime",
+              "runtime version and limits",
+              "candidate source",
+              "disposable candidate-state copy"
+            ],
+            "modality": [
+              "text",
+              "source",
+              "execution",
+              "subprocess execution",
+              "captured stdout and stderr",
+              "exit status"
+            ],
+            "oracle": "agentic-observation",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.92,
+            "repair_success": 0.86,
+            "regression_risk": 0.16,
+            "producer_evidence_overlap": 0.18,
+            "confidence": 0.82,
+            "predicted_duration_s": 55.0,
+            "predicted_model_cost_usd": 0.13
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "agentic-evidence-2",
+          "kind": "codex_agent",
+          "cost": 1.5,
+          "blocking": true,
+          "failure_modes": [
+            "F1",
+            "F3",
+            "F4"
+          ],
+          "template_id": "agentic-evidence-reviewer",
+          "objective": "Run branch-distinguishing observations for duplicate-member handling, explicit UTF-8 decoding across runtime settings, and escaped-surrogate output, while respecting unresolved contract semantics.",
+          "prompt": "In a fresh disposable workspace copy, exercise the actual CLI with one minimal input that distinguishes duplicate-member interpretations, valid non-ASCII UTF-8 bytes under materially different available locale or runtime encoding settings, and one escaped lone-surrogate key. Record raw input bytes or an equivalent reproducible description, environment settings, exit status, stdout, and stderr. For duplicate members and lone surrogates, report the observed branch and consult raw or unchanged baseline authority before marking it blocking; if authority does not select a branch, keep it advisory. A locale-dependent failure of valid UTF-8 input is requirement-grounded and may be blocking.",
+          "estimated_detection": {
+            "F1": 0.0,
+            "F3": 0.7,
+            "F4": 0.0
+          },
+          "timeout_s": 180.0,
+          "sandbox": "workspace-write",
+          "network_access": false,
+          "isolation": "temporary-copy",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral",
+            "prompt_family": "agentic-evidence-reviewer-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace",
+              "runtime",
+              "runtime locale configuration",
+              "unchanged baseline authority if present",
+              "candidate source",
+              "fresh disposable candidate-state copy"
+            ],
+            "modality": [
+              "text",
+              "source",
+              "execution",
+              "byte-oriented stdin",
+              "environment variation",
+              "captured process streams",
+              "exit status"
+            ],
+            "oracle": "agentic-observation",
+            "test_author": null,
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.84,
+            "repair_success": 0.8,
+            "regression_risk": 0.2,
+            "producer_evidence_overlap": 0.14,
+            "confidence": 0.78,
+            "predicted_duration_s": 65.0,
+            "predicted_model_cost_usd": 0.16
+          },
+          "revalidates_feedback": false
+        },
+        {
+          "verifier_id": "adversarial-test-1",
+          "kind": "codex_agent",
+          "cost": 2.0,
+          "blocking": true,
+          "failure_modes": [
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6"
+          ],
+          "template_id": "test-agent",
+          "objective": "Generate and execute an isolated adversarial matrix against the real program, covering all modeled edge classes and minimizing reproducible failures.",
+          "prompt": "Work only in a disposable workspace copy. Derive executable checks from the numbered raw requirements and the six targeted failure modes, and run them against the actual aggregate.py process. Cover duplicate JSON members, integer conversion limits, valid UTF-8 under altered decoding conditions, escaped lone surrogates, pathological nesting, and whether the repository tests omit these classes. Capture input construction, environment, exit status, stdout, and stderr for reproducibility, and minimize failures. For duplicate-member and lone-surrogate branches, report observations but issue Stop-eligible findings only if raw requirements or unchanged baseline evidence selects the violated interpretation. Do not modify the producer workspace or use network access.",
+          "estimated_detection": {
+            "F1": 0.0,
+            "F2": 0.82,
+            "F3": 0.66,
+            "F4": 0.0,
+            "F5": 0.9,
+            "F6": 0.7
+          },
+          "timeout_s": 240.0,
+          "sandbox": "workspace-write",
+          "network_access": false,
+          "isolation": "temporary-copy",
+          "model": "gpt-5.6-sol",
+          "command": [],
+          "failure_exit_codes": [
+            1
+          ],
+          "working_directory": null,
+          "lineage": {
+            "provider": "openai-codex",
+            "model": "gpt-5.6-sol",
+            "thread_policy": "fresh-ephemeral-copy",
+            "prompt_family": "test-agent-v1",
+            "context_sources": [
+              "raw-requirements",
+              "workspace-copy",
+              "generated-tests",
+              "numbered raw requirements",
+              "task failure-mode model",
+              "candidate tests",
+              "runtime configuration",
+              "disposable candidate-state copy"
+            ],
+            "modality": [
+              "text",
+              "source",
+              "execution",
+              "generated executable checks",
+              "byte-oriented input",
+              "subprocess streams",
+              "exit status"
+            ],
+            "oracle": "generated-executable-check",
+            "test_author": "independent-codex-test-agent",
+            "metadata": {}
+          },
+          "value_estimate": {
+            "actionability": 0.95,
+            "repair_success": 0.88,
+            "regression_risk": 0.17,
+            "producer_evidence_overlap": 0.22,
+            "confidence": 0.85,
+            "predicted_duration_s": 85.0,
+            "predicted_model_cost_usd": 0.22
+          },
+          "revalidates_feedback": false
+        }
+      ],
+      "shared_blind_spots": [
+        {
+          "scenario_id": "SB1",
+          "description": "Every candidate shares the OpenAI Codex provider and the same raw-requirements/task-model framing; fresh threads and distinct names do not remove correlated interpretation errors, especially around duplicate members, resource limits, and surrogate semantics.",
+          "weight": 0.85,
+          "affected_verifiers": [
+            "repo-evidence-1",
+            "repo-evidence-2",
+            "semantic-review-1",
+            "semantic-review-2",
+            "agentic-evidence-1",
+            "agentic-evidence-2",
+            "adversarial-test-1"
+          ],
+          "failure_modes": [
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6"
+          ],
+          "residual_detection": 0.3,
+          "sources": [
+            "shared provider/model lineage",
+            "shared raw requirements",
+            "shared task model"
+          ]
+        },
+        {
+          "scenario_id": "SB2",
+          "description": "All execution-oriented candidates observe substantially the same Python runtime and operating-system environment, so platform-specific UTF-8 behavior and parser limits may agree locally while failing elsewhere.",
+          "weight": 0.7,
+          "affected_verifiers": [
+            "repo-evidence-1",
+            "repo-evidence-2",
+            "agentic-evidence-1",
+            "agentic-evidence-2",
+            "adversarial-test-1"
+          ],
+          "failure_modes": [
+            "F2",
+            "F3",
+            "F4",
+            "F6"
+          ],
+          "residual_detection": 0.36,
+          "sources": [
+            "shared workspace host",
+            "shared runtime family",
+            "shared locale availability"
+          ]
+        },
+        {
+          "scenario_id": "SB3",
+          "description": "Repository evidence and producer evidence are authored from the same project tests and documentation, creating correlated omissions; repeatedly passing the declared five-test suite cannot independently expose absent edge classes.",
+          "weight": 0.78,
+          "affected_verifiers": [
+            "repo-evidence-1",
+            "repo-evidence-2",
+            "semantic-review-2"
+          ],
+          "failure_modes": [
+            "F5"
+          ],
+          "residual_detection": 0.18,
+          "sources": [
+            "project-owned tests",
+            "project README",
+            "producer test run"
+          ]
+        },
+        {
+          "scenario_id": "SB4",
+          "description": "The two agentic reviewers and the adversarial test agent share source/runtime context and closely related Codex-generated adversarial reasoning, so their chosen limits and fixtures may converge on the same cases.",
+          "weight": 0.66,
+          "affected_verifiers": [
+            "agentic-evidence-1",
+            "agentic-evidence-2",
+            "adversarial-test-1"
+          ],
+          "failure_modes": [
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F6"
+          ],
+          "residual_detection": 0.28,
+          "sources": [
+            "shared candidate source",
+            "shared runtime observations",
+            "Codex-authored adversarial cases"
+          ]
+        },
+        {
+          "scenario_id": "SB5",
+          "description": "No authoritative baseline contract resolves duplicate-member or unpaired-surrogate acceptance. Runtime observations can distinguish behavior but cannot make either interpretation Stop-gating.",
+          "weight": 0.95,
+          "affected_verifiers": [
+            "semantic-review-1",
+            "agentic-evidence-2",
+            "adversarial-test-1"
+          ],
+          "failure_modes": [
+            "F1",
+            "F4"
+          ],
+          "residual_detection": 0.0,
+          "sources": [
+            "raw-requirement ambiguity",
+            "absence of visible unchanged baseline authority",
+            "shared contract interpretation"
+          ]
+        }
+      ],
+      "uncertainties": [
+        "analysis_uncertainty: The raw requirement does not define whether repeated JSON member names count as extra fields. JSON interoperability guidance favors unique names, but duplicate-name handling is not established by a visible baseline contract; F1 therefore represents a competing interpretation rather than a definitive violation.",
+        "analysis_uncertainty: The raw requirement says the program reads UTF-8 but does not explicitly state the required response to invalid UTF-8. The candidate treats it as invalid input with status 2, and tests encode that assumption, but this behavior is not a named error case in the authoritative requirements.",
+        "analysis_uncertainty: The required successful exit status is not stated explicitly; status 0 is conventional and is used by the candidate tests, but should not be promoted to a stricter independent contract without baseline evidence.",
+        "analysis_uncertainty: No baseline source files or baseline tests were visible in the inspected working tree, so contract clarification beyond the raw requirements was unavailable.",
+        "analysis_uncertainty: The term dependency-free is assumed to permit the Python standard library; the raw requirements do not specify whether aggregate.py must be directly executable or invoked through python3.",
+        "analysis_uncertainty: The contract does not specify limits for input size, nesting depth, integer magnitude, or aggregate magnitude, leaving the expected handling of runtime resource limits uncertain.",
+        "analysis_uncertainty: The contract does not clarify whether JSON strings containing escaped unpaired UTF-16 surrogates must be accepted as string keys or rejected as invalid Unicode.",
+        "analysis_uncertainty: Repository inspection confirmed that five candidate tests pass and git diff checking reports no whitespace errors, but producer evidence about readiness reporting itself cannot establish what message will ultimately be reported to the user.",
+        "coverage_gap: No non-Codex model or human-authored independent oracle is available, so semantic-review independence is limited.",
+        "coverage_gap: No cross-platform or container matrix is available; locale and UTF-8 observations are limited to configurations installed on the shared host.",
+        "coverage_gap: No authoritative baseline files are known to resolve duplicate JSON member names, unpaired-surrogate keys, invalid UTF-8 handling, or resource limits; F1 and F4 therefore have zero Stop-gating detection probability despite planned observations.",
+        "coverage_gap: Repository-evidence agents cannot generate missing adversarial fixtures and may only report a gap when project-owned commands do not cover F2, F3, F4, or F6.",
+        "coverage_gap: Static review cannot prove absence of network activity across all runtime paths, and no dedicated syscall or network-isolation trace oracle is present.",
+        "coverage_gap: Readiness-message timing for B9 cannot be independently verified from repository state; only test execution for the candidate state can be observed."
+      ],
+      "producer_evidence": {
+        "task_epoch": 1,
+        "event_count": 4,
+        "succeeded": 4,
+        "failed": 0,
+        "unknown": 0,
+        "total_duration_s": null,
+        "command_previews": [
+          "/bin/zsh -lc \"pwd && rg --files -g '\"'!*__pycache__*'\"' -g '\"'!*.pyc'\"' | sed -n '1,160p'\"",
+          "/bin/zsh -lc 'ls -la && git status --short && git log -3 --oneline'",
+          "/bin/zsh -lc \"chmod +x aggregate.py && python3 -m unittest -v && printf '%s\\\\n' '{\\\"key\\\":\\\"b\\\",\\\"delta\\\":2}' '{\\\"key\\\":\\\"a\\\",\\\"delta\\\":1}' | ./aggregate.py && git diff --check && git status --short\""
+        ],
+        "failure_previews": [],
+        "changed_paths": [
+          "README.md",
+          "aggregate.py",
+          "test_aggregate.py"
+        ]
+      },
+      "stage_costs": [
+        {
+          "stage_id": "graft-original-behavior-v1",
+          "kind": "modeling",
+          "duration_s": 70.77402629191056,
+          "input_tokens": 31883,
+          "cached_input_tokens": 15104,
+          "output_tokens": 2472,
+          "estimated_cost_usd": null
+        },
+        {
+          "stage_id": "graft-original-verifier-planner-v1",
+          "kind": "modeling",
+          "duration_s": 107.12426266702823,
+          "input_tokens": 17837,
+          "cached_input_tokens": 0,
+          "output_tokens": 3409,
+          "estimated_cost_usd": null
+        }
+      ],
+      "promotion": null,
+      "method": "graft-value-aware"
+    },
+    "selection": {
+      "verifier_ids": [],
+      "expected_utility": 0.0,
+      "expected_coverage": 0.0,
+      "residual_risk": 1.0,
+      "total_cost": 0.0,
+      "feasible": false,
+      "evaluated_candidates": 0,
+      "policy": "value-aware",
+      "net_value": 0.0,
+      "no_op": false,
+      "marginal_values": {}
+    },
+    "results": [],
+    "report_path": "<local-report-not-published>",
+    "promotion_outcome": null
+  },
+  "singleton_net_values": {
+    "repo-evidence-1": -0.13401193404698414,
+    "repo-evidence-2": -0.11473515245714284,
+    "semantic-review-1": -0.13833333333333334,
+    "semantic-review-2": -0.2077438095238095,
+    "agentic-evidence-1": -0.21217863891573335,
+    "agentic-evidence-2": -0.22430319137333332,
+    "adversarial-test-1": -0.3119472317466032
+  },
+  "interpretation": "The intrinsic arm estimates selector behavior on the frozen modeled graph. It is post-hoc and is not a causal utility result."
+}

@@ -217,7 +217,7 @@ class ValueAwareSelectorTests(unittest.TestCase):
         self.assertEqual(selected.verifier_ids, ("dynamic",))
         self.assertFalse(selected.no_op)
 
-    def test_predicted_wall_budget_can_make_noop_preferable(self) -> None:
+    def test_resource_infeasibility_is_not_reported_as_noop_value(self) -> None:
         selected = ValueAwareSelector().select(
             self.value_graph(
                 VerifierValueEstimate(
@@ -234,7 +234,9 @@ class ValueAwareSelectorTests(unittest.TestCase):
             policy=self.policy(),
             available_wall_time_s=10,
         )
-        self.assertTrue(selected.no_op)
+        self.assertFalse(selected.no_op)
+        self.assertFalse(selected.feasible)
+        self.assertEqual(selected.evaluated_candidates, 0)
         self.assertEqual(selected.verifier_ids, ())
 
 

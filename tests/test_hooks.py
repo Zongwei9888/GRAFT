@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -312,7 +313,19 @@ class HookReplayTests(unittest.TestCase):
                 self._config(root, selection_policy="value-aware")
                 self._prompt(root, "value-noop", "Implement the requested change")
                 source.write_text("candidate\n", encoding="utf-8")
-                low_value = self._graph(0, "placeholder", value_aware=False)
+                low_value = self._graph(0, "placeholder", value_aware=True)
+                low_value = replace(
+                    low_value,
+                    verifiers=(
+                        replace(
+                            low_value.verifiers[0],
+                            value_estimate=replace(
+                                low_value.verifiers[0].value_estimate,
+                                producer_evidence_overlap=1,
+                            ),
+                        ),
+                    ),
+                )
                 assessment = CompletionAssessment(
                     CompletionState.CANDIDATE_COMPLETE,
                     1.0,

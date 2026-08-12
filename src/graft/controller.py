@@ -215,6 +215,30 @@ class GraftController:
                 session_id,
             )
         if not selection.verifier_ids:
+            if (
+                not selection.feasible
+                and self.config.selection.strategy == "value-aware"
+            ):
+                if graph.promotion is not None:
+                    reason = (
+                        "The repaired candidate requires prior-feedback revalidation, but no "
+                        "eligible promotion verifier fits the remaining task-epoch budget."
+                    )
+                else:
+                    reason = (
+                        "No verifier was feasible inside the remaining task-epoch resource "
+                        "budget. GRAFT did not make a No-Op value judgment for this checkpoint."
+                    )
+                return self._finish(
+                    Decision(
+                        kind=DecisionKind.UNRESOLVED,
+                        reason=reason,
+                        snapshot=source,
+                        graph=graph,
+                        selection=selection,
+                    ),
+                    session_id,
+                )
             if selection.no_op and self.config.selection.strategy == "value-aware":
                 return self._finish(
                     Decision(
@@ -222,20 +246,6 @@ class GraftController:
                         reason=(
                             "GRAFT selected No-Op because no verifier had positive conservative "
                             "marginal net value over the producer evidence and execution cost."
-                        ),
-                        snapshot=source,
-                        graph=graph,
-                        selection=selection,
-                    ),
-                    session_id,
-                )
-            if graph.promotion is not None:
-                return self._finish(
-                    Decision(
-                        kind=DecisionKind.UNRESOLVED,
-                        reason=(
-                            "The repaired candidate requires prior-feedback revalidation, but no "
-                            "eligible promotion verifier fits the remaining task-epoch budget."
                         ),
                         snapshot=source,
                         graph=graph,
