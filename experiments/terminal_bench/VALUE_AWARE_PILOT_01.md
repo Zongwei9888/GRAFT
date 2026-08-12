@@ -1,7 +1,32 @@
 # Value-aware shared-prefix pilot 01
 
-Status: preregistered before the official oracle, producer, GRAFT verifier, checkpoint replay, or
-Native control is run.
+Status: prospectively censored before treatment. The official Harbor 0.20.0 registry could not
+resolve the frozen Terminal-Bench 3 revision/digest or the selected task, so no producer, GRAFT
+verifier, checkpoint replay, or Native control was run for this pilot.
+
+## Censoring record (2026-08-12)
+
+The required first command, the official oracle sanity check, failed during dataset resolution and
+before Harbor created a task environment:
+
+```text
+ValueError: Digest 'sha256:88433fbcecd1a3f81f7a71bff4cc76c394d0edbefb7e028f90d4109b639fefba'
+not found for dataset terminal-bench/terminal-bench-3
+```
+
+Queries for `latest`, revision `10`, revision `9`, and `head`, plus direct resolution of
+`terminal-bench/wal-recovery-ordering`, also failed. The public Harbor Hub still listed
+Terminal-Bench 3, and the installed Harbor 0.20.0 matched the latest public release. Per the frozen
+rules below, this is an infrastructure censoring event; no substitute task is used to estimate the
+prospectively registered outcome.
+
+After recording the censoring event, a separate **post-hoc infrastructure smoke** uses the locally
+cached official `cancel-async-tasks` task. Its purpose is limited to checking that the external
+value-aware profile is installed, GRAFT runs at a Codex completion boundary, checkpoints and state
+are exported, and any eligible finding is returned to the same Codex thread. Its score is not a
+replacement pilot result, a generalization result, or evidence that the selector improves coding
+quality. The smoke uses the unchanged GRAFT commit and official task evaluator; the online GRAFT
+stages do not read the evaluator implementation or output.
 
 ## Frozen method
 
@@ -92,4 +117,3 @@ One task is a mechanism/smoke result, not an effectiveness estimate and not a WS
   replace this prospective result.
 - A run without a captured verification-eligible checkpoint cannot estimate `delta_feedback` and
   is reported as a measurement failure or a genuine No-Op boundary, as applicable.
-
