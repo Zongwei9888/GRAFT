@@ -427,6 +427,33 @@ class GraftController:
             if item.startswith(("coverage_gap:", "lineage_uncertainty:"))
         )
         if errors or suspicions or abstentions or blocking_uncertainties:
+            # A successful promotion is a conditional safety decision about the
+            # feedback-induced change: the prior executable finding was repaired
+            # and its named behaviors were preserved. Generic graph-wide coverage
+            # gaps remain valuable report metadata, but making them veto this state
+            # would render ``fixed_and_preserved`` non-promotable by construction.
+            # Concrete verifier errors, abstentions, and new findings still block.
+            if (
+                graph.promotion is not None
+                and promotion_outcome == PromotionOutcome.FIXED_AND_PRESERVED
+                and not errors
+                and not suspicions
+                and not abstentions
+            ):
+                return Decision(
+                    kind=DecisionKind.ALLOW,
+                    reason=(
+                        "The feedback-induced candidate was promoted: executed eligible "
+                        "evidence shows the prior finding is fixed and the named behaviors "
+                        "remain preserved. General coverage gaps remain recorded in the report; "
+                        "this is evidence, not proof."
+                    ),
+                    snapshot=source,
+                    graph=graph,
+                    selection=selection,
+                    results=results,
+                    promotion_outcome=promotion_outcome,
+                )
             detail: list[str] = []
             detail.extend(f"{item.verifier_id}: {item.summary}" for item in errors)
             detail.extend(
@@ -443,6 +470,24 @@ class GraftController:
                 reason=(
                     "Verification found no reproducible blocking counterexample, but the "
                     "evidence remains incomplete. " + "; ".join(detail)
+                ),
+                snapshot=source,
+                graph=graph,
+                selection=selection,
+                results=results,
+                promotion_outcome=promotion_outcome,
+            )
+
+        if (
+            graph.promotion is not None
+            and promotion_outcome == PromotionOutcome.FIXED_AND_PRESERVED
+        ):
+            return Decision(
+                kind=DecisionKind.ALLOW,
+                reason=(
+                    "The feedback-induced candidate was promoted: executed eligible evidence "
+                    "shows the prior finding is fixed and the named behaviors remain preserved. "
+                    "This is evidence, not proof."
                 ),
                 snapshot=source,
                 graph=graph,

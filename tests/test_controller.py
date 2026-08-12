@@ -284,6 +284,19 @@ class ControllerTests(unittest.TestCase):
                 PromotionOutcome.FIXED_AND_PRESERVED,
             )
 
+            gap_graph = replace(
+                graph,
+                uncertainties=(
+                    "coverage_gap: no independent oracle exists for unrelated behavior",
+                ),
+            )
+            high_residual_selection = replace(selection, residual_risk=0.99)
+            promoted_with_gap = controller._decide(
+                source, gap_graph, high_residual_selection, (executed,)
+            )
+            self.assertEqual(promoted_with_gap.kind, DecisionKind.ALLOW)
+            self.assertIn("coverage gaps remain recorded", promoted_with_gap.reason)
+
             regressed = VerifierResult(
                 verifier_id=spec.verifier_id,
                 verdict=Verdict.FAIL,

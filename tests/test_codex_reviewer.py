@@ -14,6 +14,7 @@ from graft.schema import (
     FailureMode,
     FeedbackGraph,
     Lineage,
+    PromotionOutcome,
     TurnResult,
     VerifierSpec,
     Verdict,
@@ -59,6 +60,45 @@ class EvidenceRunner:
         }
         return TurnResult(
             thread_id="verifier",
+            final_response=json.dumps(response),
+            events=(
+                {
+                    "type": "item.completed",
+                    "item": {"type": "command_execution", "command": command},
+                },
+            ),
+            usage={},
+            return_code=0,
+            stderr="",
+            duration_s=0.01,
+        )
+
+
+class PassingPromotionRunner:
+    def start_thread(self, prompt, repo, config):
+        command = ["python", "promotion_check.py"]
+        response = {
+            "verdict": "pass",
+            "failure_modes": [],
+            "summary": "prior failure is fixed and behavior is preserved",
+            "evidence": [
+                {
+                    "kind": "runtime",
+                    "path": None,
+                    "line": None,
+                    "command": command,
+                    "observation": "the repaired runtime check passed",
+                    "failure_modes": ["f"],
+                    "requirement_refs": ["R1"],
+                    "oracle_origin": "requirement_derived_runtime",
+                }
+            ],
+            "confidence": 0.9,
+            "reproducible": True,
+            "promotion_outcome": "fixed_and_preserved",
+        }
+        return TurnResult(
+            thread_id="promotion-verifier",
             final_response=json.dumps(response),
             events=(
                 {
@@ -215,6 +255,46 @@ class CodexReviewerTests(unittest.TestCase):
                 environment_fingerprint="test",
             )
             self.assertEqual(source.tree_hash, after.tree_hash)
+
+    def test_passing_promotion_retains_target_modes_for_executed_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            source = freeze_source(root, requirements=("Keep the public behavior",))
+            failure = FailureMode("f", "b", "public behavior fails", "runtime", (), (), 1)
+            spec = VerifierSpec(
+                verifier_id="promotion-agent",
+                kind="codex_agent",
+                cost=1,
+                blocking=True,
+                failure_modes=("f",),
+                objective="revalidate the repaired behavior",
+                prompt="execute the prior reproduction",
+                isolation="temporary-copy",
+                revalidates_feedback=True,
+            )
+            graph = FeedbackGraph(
+                source.checkpoint_key,
+                (Behavior("b", "keep public behavior", (), ("result",), 1, 1, 0),),
+                (failure,),
+                (spec,),
+                (),
+            )
+            result = VerifierExecutor(codex_runner=PassingPromotionRunner()).run(
+                spec,
+                source,
+                requirements=("Keep the public behavior",),
+                graph=graph,
+                config_path=root / "config.json",
+                environment_fingerprint="test",
+            )
+            self.assertEqual(result.verdict, Verdict.PASS)
+            self.assertTrue(result.executed_evidence)
+            self.assertEqual(result.evidence[0].failure_modes, ("f",))
+            self.assertEqual(
+                result.promotion_outcome, PromotionOutcome.FIXED_AND_PRESERVED
+            )
 
     def _run_evidence_case(
         self,

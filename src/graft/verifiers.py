@@ -239,7 +239,18 @@ class VerifierExecutor:
             valid_modes = tuple(
                 item for item in reported_modes if item in set(spec.failure_modes)
             )
-            evidence = _parse_evidence(raw.get("evidence", []), set(valid_modes))
+            # A failing verdict's top-level modes identify the failures it claims.
+            # A passing promotion verdict intentionally has no top-level failures,
+            # but its executed evidence must still map the repaired and preserved
+            # checks to the verifier's target modes. Filtering PASS evidence by the
+            # empty top-level list made successful promotion mechanically
+            # impossible even when the commands were present in Codex events.
+            evidence_modes = (
+                set(spec.failure_modes)
+                if verdict == Verdict.PASS and spec.revalidates_feedback
+                else set(valid_modes)
+            )
+            evidence = _parse_evidence(raw.get("evidence", []), evidence_modes)
             reproduced_modes = _blocking_reproduced_modes(
                 evidence,
                 turn.events,
