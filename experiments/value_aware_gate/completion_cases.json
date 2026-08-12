@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "complete-implementation",
+      "expected_state": "candidate_complete",
+      "requirements": ["Implement the requested configuration normalizer and verify its public examples."],
+      "last_message": "Implemented the normalizer, added the requested examples, and ran the repository checks successfully. The result is ready.",
+      "candidate_text": "normalizer implementation\nexamples verified\n",
+      "evidence": {"commands": ["project-check"], "succeeded": 1, "failed": 0}
+    },
+    {
+      "id": "complete-document",
+      "expected_state": "candidate_complete",
+      "requirements": ["Create a migration guide as a repository document."],
+      "last_message": "The migration guide is complete in MIGRATION.md, including prerequisites, rollback, and the requested examples.",
+      "candidate_text": "migration guide complete\n",
+      "evidence": {"commands": [], "succeeded": 0, "failed": 0}
+    },
+    {
+      "id": "complete-bugfix",
+      "expected_state": "candidate_complete",
+      "requirements": ["Fix the reported boundary error and add a regression check."],
+      "last_message": "Fixed the boundary error and added a regression check that failed before the patch and now passes.",
+      "candidate_text": "boundary fix\nregression check\n",
+      "evidence": {"commands": ["repository regression check"], "succeeded": 1, "failed": 0}
+    },
+    {
+      "id": "complete-artifact",
+      "expected_state": "candidate_complete",
+      "requirements": ["Produce the requested user-facing artifact and verify it can be opened."],
+      "last_message": "Created the artifact and opened the generated result successfully. It is ready for review.",
+      "candidate_text": "deliverable artifact\n",
+      "evidence": {"commands": ["artifact validation"], "succeeded": 1, "failed": 0}
+    },
+    {
+      "id": "intermediate-tests-pending",
+      "expected_state": "intermediate",
+      "requirements": ["Implement the parser change and cover it with tests."],
+      "last_message": "The parser change is in place. Next I need to add the edge-case tests and run the full suite.",
+      "candidate_text": "partial parser change\n",
+      "evidence": {"commands": [], "succeeded": 0, "failed": 0}
+    },
+    {
+      "id": "intermediate-migration-pending",
+      "expected_state": "intermediate",
+      "requirements": ["Add persistent storage and migrate existing records."],
+      "last_message": "I added the storage interface and initial adapter. The migration and compatibility validation are still pending.",
+      "candidate_text": "storage scaffold\n",
+      "evidence": {"commands": ["interface check"], "succeeded": 1, "failed": 0}
+    },
+    {
+      "id": "question-backend-choice",
+      "expected_state": "question",
+      "requirements": ["Add persistence suitable for the deployment."],
+      "last_message": "I prepared the shared interface, but the repository does not determine the storage backend. Should I target the embedded or remote option?",
+      "candidate_text": "shared interface draft\n",
+      "evidence": {"commands": [], "succeeded": 0, "failed": 0}
+    },
+    {
+      "id": "question-schema-choice",
+      "expected_state": "question",
+      "requirements": ["Add an export schema for downstream consumers."],
+      "last_message": "The schema file is started. Do timestamps need to be epoch numbers or formatted strings? That choice changes the public contract.",
+      "candidate_text": "schema draft\n",
+      "evidence": {"commands": [], "succeeded": 0, "failed": 0}
+    },
+    {
+      "id": "explanation-diagnostic-only",
+      "expected_state": "explanation",
+      "requirements": ["Diagnose the failure and explain the cause; do not implement a fix."],
+      "last_message": "The failure comes from the ordering described in the diagnostic note. I only added a trace artifact as requested and made no implementation change.",
+      "candidate_text": "diagnostic trace artifact\n",
+      "evidence": {"commands": ["read-only diagnostic"], "succeeded": 1, "failed": 0}
+    },
+    {
+      "id": "blocked-credential",
+      "expected_state": "blocked",
+      "requirements": ["Integrate the service and validate a real request."],
+      "last_message": "The local adapter is scaffolded, but I cannot complete or validate the integration without the required service credential.",
+      "candidate_text": "adapter scaffold\n",
+      "evidence": {"commands": ["service probe"], "succeeded": 0, "failed": 1}
+    },
+    {
+      "id": "abstain-ambiguous-progress",
+      "expected_state": "abstain",
+      "requirements": ["Update the component for the new behavior."],
+      "last_message": "I updated the relevant files. We can continue from here.",
+      "candidate_text": "unspecified update\n",
+      "evidence": {"commands": [], "succeeded": 0, "failed": 0}
+    },
+    {
+      "id": "blocked-external-environment",
+      "expected_state": "blocked",
+      "requirements": ["Deploy the change and confirm the production health check."],
+      "last_message": "The deployment manifest is prepared, but this environment has no access to the deployment target, so production confirmation remains blocked.",
+      "candidate_text": "deployment manifest draft\n",
+      "evidence": {"commands": ["deployment target probe"], "succeeded": 0, "failed": 1}
+    }
+  ]
+}

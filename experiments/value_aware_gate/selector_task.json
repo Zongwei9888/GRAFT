@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "model": "gpt-5.6-sol",
+  "producer_timeout_s": 600,
+  "task": "Create a dependency-free command-line program aggregate.py. It reads UTF-8 JSON Lines from stdin. Ignore empty or whitespace-only lines. Every other line must be a JSON object with exactly two fields: string key and integer delta; booleans are not integers. Sum deltas by key. Write one JSON object with keys sorted lexicographically and compact separators, followed by one newline. On malformed JSON, a non-object, missing or extra fields, or wrong field types, write no stdout, write one concise stderr line, and exit 2. Add automated tests and a README with usage. Do not use the network. Run the tests before reporting the implementation ready."
+}
