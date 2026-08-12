@@ -1,6 +1,6 @@
 {
   "name": "graft",
-  "version": "0.5.0+codex.20260812001252",
+  "version": "0.5.0+codex.20260812064818",
   "description": "A dynamic, lineage-aware verification governor for Codex checkpoints.",
   "author": {
     "name": "Zongwei9888"

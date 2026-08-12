@@ -54,6 +54,6 @@
       "enum": ["fixed_and_preserved", "not_fixed", "regressed", "unresolved", null]
     }
   },
-  "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible"],
+  "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible", "promotion_outcome"],
   "additionalProperties": false
 }

@@ -1,0 +1,21 @@
+{
+  "protocol_version": 1,
+  "attempt": 1,
+  "experiment_commit": "c02ea9b3db32e418d019dd0483855bb6d5d7ae08",
+  "product_candidate_commit": "d5da0d18562dd7b1dd8182c05f7e34f92c24d3c1",
+  "codex_version": "codex-cli 0.147.0",
+  "model": "gpt-5.6-sol",
+  "status": "pre_selection_infrastructure_failure",
+  "producer_thread_id": "019ff4b2-a620-7192-afb9-5f65cc600a6c",
+  "producer_duration_s": 65.56292779091746,
+  "producer_checkpoint": "166539c6a22ff69aaf0481fa556c47f8ffc84a32fe7a201c994bc61da7eecb3f",
+  "held_out_evaluator": {
+    "passed": 15,
+    "total": 15,
+    "all_passed": true
+  },
+  "failure_stage": "verifier_planner",
+  "error_type": "invalid_json_schema",
+  "error": "The strict Codex output schema omitted value_estimate from the candidate object's required array; no selector or verifier executed.",
+  "retry_policy": "Restore the exact archived checkpoint and producer JSONL after the schema-only fix; do not rerun the producer."
+}

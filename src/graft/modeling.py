@@ -314,6 +314,11 @@ task-conditional and conservative. They are decision estimates, not correctness 
             "\nProducer evidence already collected in this task epoch:\n"
             + _producer_evidence_text(producer_evidence)
         )
+    else:
+        value_instructions = """
+Set value_estimate=null for every candidate because GRAFT Original does not use repair-value
+estimates. Set revalidates_feedback=false unless a prior feedback promotion packet is present.
+"""
     promotion_instructions = ""
     promotion_section = ""
     if promotion is not None:

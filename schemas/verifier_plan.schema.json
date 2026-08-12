@@ -31,7 +31,7 @@
           "additional_modalities": {"type": "array", "items": {"type": "string"}},
           "oracle": {"type": ["string", "null"]},
           "value_estimate": {
-            "type": "object",
+            "type": ["object", "null"],
             "properties": {
               "actionability": {"type": "number", "minimum": 0, "maximum": 1},
               "repair_success": {"type": "number", "minimum": 0, "maximum": 1},
@@ -54,7 +54,7 @@
           },
           "revalidates_feedback": {"type": "boolean"}
         },
-        "required": ["id", "template_id", "target_failure_modes", "objective", "prompt", "estimated_detection", "additional_context_sources", "additional_modalities", "oracle"],
+        "required": ["id", "template_id", "target_failure_modes", "objective", "prompt", "estimated_detection", "additional_context_sources", "additional_modalities", "oracle", "value_estimate", "revalidates_feedback"],
         "additionalProperties": false
       }
     },

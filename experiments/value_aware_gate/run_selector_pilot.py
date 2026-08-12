@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 from dataclasses import replace
 from pathlib import Path
@@ -73,7 +74,36 @@ def main() -> int:
         type=Path,
         default=EXPERIMENT / "results" / "m2_selector_pilot.json",
     )
+    parser.add_argument(
+        "--restore-checkpoint",
+        type=Path,
+        help="Restore an archived first checkpoint instead of rerunning the producer.",
+    )
+    parser.add_argument(
+        "--producer-events",
+        type=Path,
+        help="Producer TurnResult JSON saved before an infrastructure-only retry.",
+    )
+    parser.add_argument(
+        "--baseline-archive",
+        type=Path,
+        help="Immutable task-start baseline archive paired with a restored checkpoint.",
+    )
+    parser.add_argument(
+        "--expected-checkpoint",
+        help="Fail before graph construction unless the restored checkpoint matches this key.",
+    )
     args = parser.parse_args()
+    restore_inputs = (
+        bool(args.restore_checkpoint),
+        bool(args.producer_events),
+        bool(args.baseline_archive),
+    )
+    if any(restore_inputs) and not all(restore_inputs):
+        parser.error(
+            "--restore-checkpoint, --producer-events, and --baseline-archive "
+            "must be supplied together"
+        )
     task_manifest = json.loads(
         (EXPERIMENT / "selector_task.json").read_text(encoding="utf-8")
     )
@@ -85,9 +115,12 @@ def main() -> int:
         run_root = Path(temporary)
         workspace = run_root / "producer-workspace"
         workspace.mkdir()
-        (workspace / ".gitignore").write_text(
-            ".graft/\n__pycache__/\n", encoding="utf-8"
-        )
+        if args.restore_checkpoint:
+            _restore_checkpoint(args.restore_checkpoint, workspace)
+        else:
+            (workspace / ".gitignore").write_text(
+                ".graft/\n__pycache__/\n", encoding="utf-8"
+            )
         _git(workspace, "init")
         _git(workspace, "add", ".gitignore")
         _git(
@@ -108,32 +141,51 @@ def main() -> int:
             encoding="utf-8",
         )
         config = load_config(config_path)
-        baseline_tree, baseline_files, baseline_hashes = hash_tree_manifest(workspace)
-        baseline_archive = archive_baseline(
-            workspace,
-            files=baseline_files,
-            file_hashes=baseline_hashes,
-            tree_hash=baseline_tree,
-            archive_root=artifact_root / "baselines",
-            session_id=SESSION_ID,
-            task_epoch=1,
-        )
+        if args.baseline_archive:
+            baseline_tree, baseline_files, baseline_hashes = _baseline_manifest(
+                args.baseline_archive
+            )
+            baseline_archive = args.baseline_archive.expanduser().resolve()
+        else:
+            baseline_tree, baseline_files, baseline_hashes = hash_tree_manifest(workspace)
+            baseline_archive = archive_baseline(
+                workspace,
+                files=baseline_files,
+                file_hashes=baseline_hashes,
+                tree_hash=baseline_tree,
+                archive_root=artifact_root / "baselines",
+                session_id=SESSION_ID,
+                task_epoch=1,
+            )
 
         runner = CliCodexRunner()
-        print("[M2] starting Native Codex producer with GRAFT hooks disabled", flush=True)
-        producer = runner.start_thread(
-            requirements[0],
-            workspace,
-            RunConfig(
-                sandbox="workspace-write",
-                network_access=False,
-                model=MODEL,
-                timeout_s=float(task_manifest["producer_timeout_s"]),
-                ephemeral=False,
-                isolate_config=True,
-                disable_hooks=True,
-            ),
-        )
+        if args.restore_checkpoint and args.producer_events:
+            producer_payload = json.loads(
+                args.producer_events.read_text(encoding="utf-8")
+            )
+            producer = _turn_result(producer_payload["turn"])
+            print(
+                "[M2] restored the archived Native Codex checkpoint; producer not rerun",
+                flush=True,
+            )
+        else:
+            print(
+                "[M2] starting Native Codex producer with GRAFT hooks disabled",
+                flush=True,
+            )
+            producer = runner.start_thread(
+                requirements[0],
+                workspace,
+                RunConfig(
+                    sandbox="workspace-write",
+                    network_access=False,
+                    model=MODEL,
+                    timeout_s=float(task_manifest["producer_timeout_s"]),
+                    ephemeral=False,
+                    isolate_config=True,
+                    disable_hooks=True,
+                ),
+            )
         if producer.return_code != 0:
             raise RuntimeError(
                 f"Native producer exited with {producer.return_code}: {producer.stderr}"
@@ -149,6 +201,14 @@ def main() -> int:
             baseline_hashes,
             baseline_archive,
         )
+        if (
+            args.expected_checkpoint
+            and snapshot.checkpoint_key != args.expected_checkpoint
+        ):
+            raise RuntimeError(
+                "restored checkpoint mismatch: "
+                f"expected {args.expected_checkpoint}, observed {snapshot.checkpoint_key}"
+            )
         previous_archive_home = os.environ.get(CHECKPOINT_ARCHIVE_ENV)
         os.environ[CHECKPOINT_ARCHIVE_ENV] = str(artifact_root / "checkpoints")
         try:
@@ -442,6 +502,61 @@ def _experiment_config() -> dict[str, Any]:
         if template["kind"] != "command":
             template["model"] = MODEL
     return payload
+
+
+def _restore_checkpoint(archive_path: Path, workspace: Path) -> None:
+    archive_path = archive_path.expanduser().resolve()
+    workspace = workspace.resolve()
+    with tarfile.open(archive_path, mode="r:gz") as archive:
+        for member in archive.getmembers():
+            parts = Path(member.name).parts
+            if not parts or parts[0] != "workspace" or len(parts) == 1:
+                continue
+            relative = Path(*parts[1:])
+            if relative.is_absolute() or ".." in relative.parts or not member.isfile():
+                raise ValueError(f"unsafe checkpoint member: {member.name}")
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                raise ValueError(f"checkpoint member has no content: {member.name}")
+            destination = workspace / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(extracted.read())
+            destination.chmod(member.mode & 0o777)
+
+
+def _baseline_manifest(
+    archive_path: Path,
+) -> tuple[str, tuple[str, ...], dict[str, str]]:
+    archive_path = archive_path.expanduser().resolve()
+    with tarfile.open(archive_path, mode="r:gz") as archive:
+        metadata_file = archive.extractfile("baseline.json")
+        if metadata_file is None:
+            raise ValueError("baseline archive has no baseline.json")
+        raw = json.load(metadata_file)
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("file_hashes"), Mapping):
+        raise ValueError("invalid baseline archive metadata")
+    tree_hash = str(raw.get("tree_hash", ""))
+    files = tuple(str(item) for item in raw.get("files", []))
+    hashes = {str(path): str(digest) for path, digest in raw["file_hashes"].items()}
+    if not tree_hash or set(files) != set(hashes):
+        raise ValueError("inconsistent baseline archive manifest")
+    return tree_hash, files, hashes
+
+
+def _turn_result(raw: Mapping[str, Any]) -> TurnResult:
+    events = raw.get("events", [])
+    usage = raw.get("usage", {})
+    if not isinstance(events, list) or not isinstance(usage, Mapping):
+        raise ValueError("invalid archived producer TurnResult")
+    return TurnResult(
+        thread_id=(str(raw["thread_id"]) if raw.get("thread_id") else None),
+        final_response=str(raw.get("final_response", "")),
+        events=tuple(item for item in events if isinstance(item, Mapping)),
+        usage=dict(usage),
+        return_code=int(raw.get("return_code", 1)),
+        stderr=str(raw.get("stderr", "")),
+        duration_s=float(raw.get("duration_s", 0.0)),
+    )
 
 
 def _snapshot(

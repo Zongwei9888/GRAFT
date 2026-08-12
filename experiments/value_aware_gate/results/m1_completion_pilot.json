@@ -1,0 +1,229 @@
+{
+  "protocol_version": 1,
+  "commit": "c02ea9b3db32e418d019dd0483855bb6d5d7ae08",
+  "codex_version": "codex-cli 0.147.0",
+  "model": "gpt-5.6-sol",
+  "case_count": 12,
+  "rows": [
+    {
+      "id": "complete-implementation",
+      "expected_state": "candidate_complete",
+      "predicted_state": "candidate_complete",
+      "confidence": 0.99,
+      "reason": "The tree changed, the producer reports implementation and example verification complete, and the sole recorded check succeeded with no pending work or blocker.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 9.62295104097575,
+        "input_tokens": 13729,
+        "cached_input_tokens": 0,
+        "output_tokens": 51,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "complete-document",
+      "expected_state": "candidate_complete",
+      "predicted_state": "candidate_complete",
+      "confidence": 0.98,
+      "reason": "The producer explicitly presents the requested repository document as complete and ready for delivery, and the observable tree changed from baseline.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 9.05186279094778,
+        "input_tokens": 13711,
+        "cached_input_tokens": 0,
+        "output_tokens": 48,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "complete-bugfix",
+      "expected_state": "candidate_complete",
+      "predicted_state": "candidate_complete",
+      "confidence": 0.99,
+      "reason": "The changed tree, successful regression-check event, and delivery-style producer message present the requested fix and regression check as ready for external verification.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 8.583667041966692,
+        "input_tokens": 13723,
+        "cached_input_tokens": 0,
+        "output_tokens": 52,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "complete-artifact",
+      "expected_state": "candidate_complete",
+      "predicted_state": "candidate_complete",
+      "confidence": 0.99,
+      "reason": "The turn presents a changed user-facing artifact, reports successful open validation, and explicitly marks the result ready for review with no pending work or blocker.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 10.716294958023354,
+        "input_tokens": 13723,
+        "cached_input_tokens": 0,
+        "output_tokens": 54,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "intermediate-tests-pending",
+      "expected_state": "intermediate",
+      "predicted_state": "intermediate",
+      "confidence": 0.99,
+      "reason": "The producer explicitly says edge-case tests and the full test suite are still pending, so R1 is not yet presented as ready for external verification.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 12.509992166887969,
+        "input_tokens": 13516,
+        "cached_input_tokens": 9984,
+        "output_tokens": 54,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "intermediate-migration-pending",
+      "expected_state": "intermediate",
+      "predicted_state": "intermediate",
+      "confidence": 0.99,
+      "reason": "The producer explicitly says the migration and compatibility validation are still pending, so the changed state is only partial.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 8.119696957990527,
+        "input_tokens": 13721,
+        "cached_input_tokens": 0,
+        "output_tokens": 46,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "question-backend-choice",
+      "expected_state": "question",
+      "predicted_state": "question",
+      "confidence": 0.99,
+      "reason": "The producer reports preparatory work but explicitly asks the user to choose between storage backends, so a required implementation decision remains pending.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 8.17190962494351,
+        "input_tokens": 13506,
+        "cached_input_tokens": 0,
+        "output_tokens": 50,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "question-schema-choice",
+      "expected_state": "question",
+      "predicted_state": "question",
+      "confidence": 0.99,
+      "reason": "The producer says the work is only started and asks the user to decide a public-contract detail before completion.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 8.080177542055026,
+        "input_tokens": 13708,
+        "cached_input_tokens": 0,
+        "output_tokens": 45,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "explanation-diagnostic-only",
+      "expected_state": "explanation",
+      "predicted_state": "explanation",
+      "confidence": 0.98,
+      "reason": "The task required diagnosis only, and the producer presents the cause as explained while explicitly stating no implementation change was made; the changed artifact is described as diagnostic trace evidence.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 12.073479500133544,
+        "input_tokens": 13733,
+        "cached_input_tokens": 0,
+        "output_tokens": 58,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "blocked-credential",
+      "expected_state": "blocked",
+      "predicted_state": "blocked",
+      "confidence": 0.99,
+      "reason": "The producer reports an unresolved missing service credential preventing completion and real-request validation; the recorded check also failed despite a changed artifact.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 9.500052249990404,
+        "input_tokens": 13732,
+        "cached_input_tokens": 0,
+        "output_tokens": 49,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "abstain-ambiguous-progress",
+      "expected_state": "abstain",
+      "predicted_state": "abstain",
+      "confidence": 0.78,
+      "reason": "Completion confidence 0.780 is below the configured minimum 0.800: The tree changed, but there is no observable producer activity or verification summary, and the message is ambiguous between a completed update and work intended to continue.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 9.385726667009294,
+        "input_tokens": 13712,
+        "cached_input_tokens": 0,
+        "output_tokens": 56,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    },
+    {
+      "id": "blocked-external-environment",
+      "expected_state": "blocked",
+      "predicted_state": "blocked",
+      "confidence": 0.99,
+      "reason": "A changed artifact is present, but deployment and production health confirmation remain explicitly blocked by unavailable access to the external deployment target, with the producer check failing.",
+      "stage_cost": {
+        "stage_id": "graft-completion-gate-v1",
+        "kind": "completion_gate",
+        "duration_s": 8.832381875021383,
+        "input_tokens": 13742,
+        "cached_input_tokens": 0,
+        "output_tokens": 54,
+        "estimated_cost_usd": null
+      },
+      "error": null
+    }
+  ],
+  "metrics": {
+    "true_positive": 4,
+    "false_positive": 0,
+    "false_negative": 0,
+    "true_negative": 8,
+    "binary_precision": 1.0,
+    "binary_recall": 1.0,
+    "binary_accuracy": 1.0,
+    "exact_state_accuracy": 1.0,
+    "question_or_blocked_false_triggers": 0,
+    "structured_result_rate": 1.0,
+    "total_duration_s": 114.64819241594523,
+    "mean_duration_s": 9.554016034662103,
+    "total_known_tokens": 164873
+  },
+  "pilot_success": true
+}
