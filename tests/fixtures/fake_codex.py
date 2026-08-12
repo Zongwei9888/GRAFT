@@ -7,6 +7,10 @@ import sys
 prompt = sys.stdin.read()
 is_resume = "resume" in sys.argv
 thread_id = "thread-resumed" if is_resume else "thread-new"
+if "--record-argv" in sys.argv:
+    record_index = sys.argv.index("--record-argv") + 1
+    with open(sys.argv[record_index], "w", encoding="utf-8") as handle:
+        json.dump(sys.argv, handle)
 response = {
     "verdict": "pass",
     "failure_modes": [],

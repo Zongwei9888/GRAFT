@@ -48,6 +48,13 @@ class CliCodexRunner:
                 config, repo=None, include_sandbox=False, include_color=False
             )
         )
+        # ``codex exec resume`` has no dedicated --sandbox flag, and isolated
+        # experiment turns intentionally ignore the user's config. Without an
+        # explicit override, a workspace-write producer silently resumes under
+        # the CLI's read-only default and cannot apply GRAFT feedback.
+        command.extend(("-c", f'sandbox_mode="{config.sandbox}"'))
+        if config.sandbox == "workspace-write" and config.network_access:
+            command.extend(("-c", "sandbox_workspace_write.network_access=true"))
         command.extend((thread_id, "-"))
         return self._invoke(command, feedback, repo, config.timeout_s)
 

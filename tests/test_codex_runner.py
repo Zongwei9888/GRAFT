@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -28,6 +30,28 @@ class CodexRunnerTests(unittest.TestCase):
             "thread-new", "continue", self.repo, RunConfig(timeout_s=5)
         )
         self.assertEqual(result.thread_id, "thread-resumed")
+
+    def test_continue_preserves_workspace_write_sandbox_via_config(self) -> None:
+        fixture = Path(__file__).parent / "fixtures" / "fake_codex.py"
+        with tempfile.TemporaryDirectory() as directory:
+            record = Path(directory) / "argv.json"
+            runner = CliCodexRunner(
+                (sys.executable, str(fixture), "--record-argv", str(record))
+            )
+            runner.continue_thread(
+                "thread-new",
+                "continue",
+                self.repo,
+                RunConfig(
+                    sandbox="workspace-write",
+                    network_access=True,
+                    timeout_s=5,
+                    isolate_config=True,
+                ),
+            )
+            argv = json.loads(record.read_text(encoding="utf-8"))
+        self.assertIn('sandbox_mode="workspace-write"', argv)
+        self.assertIn("sandbox_workspace_write.network_access=true", argv)
 
     def test_workspace_network_access_is_an_explicit_codex_config_override(self) -> None:
         args = self.runner._common_args(
