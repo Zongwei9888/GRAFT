@@ -1,7 +1,7 @@
 # GRAFT 核心定义、硬编码边界与自然触发策略
 
-状态：**研究定义冻结；触发与净效用修正尚未实现**  
-日期：2026-08-12
+状态：**研究定义冻结；value-aware v1 已实现但未通过效果 Gate；vNext 见优化计划**
+日期：2026-08-13
 
 本文件保存当前对 GRAFT 的统一解释，防止论文叙事、产品实现和实验修正继续漂移。
 原始方法的最高权威仍是
@@ -85,8 +85,8 @@ U_detect(S)    = Σ_z risk(z) · (1 - P(miss z | S))
 这部分的核心思想不是“多找几个 reviewer”，而是不同 reviewer 即使身份不同，也可能因为共享模型、
 prompt、任务解释、测试作者或 oracle 而一起漏检。选择器应优先检索来源和观测方式真正互补的证据。
 
-当前实现以 `U_detect` 的边际增益/名义成本做贪心选择，并与最佳单个 verifier 比较。最新因果实验
-证明这还不是正确的在线决策目标，因为正检测概率不等于正净价值。后续策略必须显式比较 No-Op：
+冻结 Original 实现以 `U_detect` 的边际增益/名义成本做贪心选择，并与最佳单个 verifier 比较。
+opt-in 的 `graft-value-aware-v1` 已实现以下净值近似并显式比较 No-Op：
 
 ```text
 ΔV(f | S, E_agent)
@@ -98,7 +98,9 @@ prompt、任务解释、测试作者或 oracle 而一起漏检。选择器应优
 ```
 
 其中 `E_agent` 是 Codex 在当前 task epoch 已经执行过的语义化测试和调查证据。如果最好的
-`ΔV <= 0`，GRAFT 不应启动昂贵 verifier。这个净效用目标目前尚未实现，不能当作现有实验处理。
+`ΔV <= 0`，GRAFT 不应启动昂贵 verifier。当前 v1 的根本限制是：它在完整 Behavior/Failure 图与
+verifier plan 已经生成之后才比较 No-Op，因此无法收回昂贵的构图沉没成本；其概率与成本也尚未在
+held-out 数据上校准。`docs/graft-optimization-plan-zh.md` 冻结了下一步的顺序 VOC 设计。
 
 ## 在 Codex 中何时自然运行
 
@@ -129,16 +131,20 @@ workspace diff 和 GRAFT 自己记录的工具语义 ledger，而不依赖不稳
 
 ## 当前实现与核心定义的偏差
 
-当前 `completion` checkpoint policy 实际上只判断：baseline 存在、workspace 已变化、checkpoint
-尚未验证。它显式丢弃 `last_assistant_message`，所以其真实语义是
-`workspace_changed_at_stop_boundary`，并没有识别候选是否准备交付。
+当前代码有两条不同路径，不能混写：
 
-这在 Terminal-Bench 的“一任务一 turn”环境中不明显，但在真实多轮 Codex session 中可能在阶段性
-实现、澄清或中间汇报后过度触发。这是已确认的生命周期设计偏差，修复前不应把当前模式称为真正的
-completion gate。
+- `graft-original` 的 checkpoint policy 仍只判断 baseline、workspace change 与 checkpoint 去重；它
+  显式丢弃 `last_assistant_message`，真实语义是 `workspace_changed_at_stop_boundary`，不是真正的
+  completion gate；
+- opt-in 的 `graft-value-aware-v1` 已在 changed Stop 后运行结构化 LLM completion gate，并已把
+  `PostToolUse` 的有界、脱敏语义 evidence summary 注入 modeler/planner；它也实现了 No-Op、
+  task-epoch cost ledger 与 promotion 状态。
 
-此外，`PostToolUse` 当前只保存输入/输出哈希，task modeler 无法知道 Codex 已经执行过哪些验证，
-导致 verifier 重复 Agent 已完成的工作。该问题与缺少净效用 No-Op 一起解释了最新实验中的成本反效果。
+v1 仍有两项关键偏差：完整构图发生在净值决策之前；No-Op、abstain、resource exhaustion 与
+evidence-backed allow 的产品状态还不够正交。混合 global/plugin/repo Hook 的 runtime authority 已在
+2026-08-13 通过 protocol-v2 隔离、确定性 authority 与 doctor 审计修复；统一 CheckpointService
+仍未实现。
+所以 v1 是已实现但未校准、且不应默认启用的研究 baseline，不能写成已经修复了 GRAFT 的反效果。
 
 ## 当前实证结论
 

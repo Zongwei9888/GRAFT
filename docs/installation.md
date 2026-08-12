@@ -76,6 +76,12 @@ graft status
 Plugin-only users can ask Codex: `Show the GRAFT status for this workspace`. No per-project
 initialization is required; the dynamic registry works in arbitrary directories.
 
+`graft doctor` also enumerates repository, plugin, and compatibility user-hook runtimes. If more
+than one is enabled, it reports the deterministic authority and any legacy/incompatible source.
+Repository development hooks take precedence inside that checkout; the plugin is authoritative in
+ordinary directories. For reproducible automation, set `GRAFT_RUNTIME_AUTHORITY` to the expected
+installation id and save the doctor JSON with the run.
+
 The default verifier sandbox has no network access. Projects that need verifiers to reach a live
 service can create and review an opt-in override with
 `graft init --verifier-network-access`, followed by `graft config trust`.

@@ -13,6 +13,9 @@ from graft.runtime_paths import workspace_runtime_paths
 from graft.schema import PromotionRequirement, StageCost
 
 
+STATE_SCHEMA_VERSION = 2
+
+
 def prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
@@ -27,6 +30,8 @@ class PromptRecord:
 @dataclass
 class SessionState:
     session_id: str
+    state_schema_version: int = STATE_SCHEMA_VERSION
+    writer_runtime: dict[str, Any] | None = None
     task_epoch: int = 1
     prompts: list[PromptRecord] = field(default_factory=list)
     baseline_tree_hash: str | None = None
@@ -53,17 +58,36 @@ class SessionState:
 
 
 class SessionStateStore:
-    def __init__(self, workspace: Path, *, root: Path | None = None) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        *,
+        root: Path | None = None,
+        writer_runtime: dict[str, Any] | None = None,
+    ) -> None:
         resolved = workspace.resolve()
         self.root = root or workspace_runtime_paths(resolved).state_dir
+        self.writer_runtime = writer_runtime
 
     def load(self, session_id: str) -> SessionState:
         path = self._path(session_id)
         if not path.exists():
             return SessionState(session_id=session_id)
         raw = json.loads(path.read_text(encoding="utf-8"))
+        schema_version = int(raw.get("state_schema_version", 1))
+        if schema_version > STATE_SCHEMA_VERSION:
+            raise ValueError(
+                f"Session state schema {schema_version} is newer than supported "
+                f"schema {STATE_SCHEMA_VERSION}: {path}"
+            )
         return SessionState(
             session_id=str(raw["session_id"]),
+            state_schema_version=STATE_SCHEMA_VERSION,
+            writer_runtime=(
+                dict(raw["writer_runtime"])
+                if isinstance(raw.get("writer_runtime"), dict)
+                else None
+            ),
             task_epoch=int(raw.get("task_epoch", 1)),
             prompts=[PromptRecord(**item) for item in raw.get("prompts", [])],
             baseline_tree_hash=raw.get("baseline_tree_hash"),
@@ -122,6 +146,9 @@ class SessionStateStore:
 
     def save(self, state: SessionState) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
+        state.state_schema_version = STATE_SCHEMA_VERSION
+        if self.writer_runtime is not None:
+            state.writer_runtime = dict(self.writer_runtime)
         payload = asdict(state)
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", dir=self.root, delete=False

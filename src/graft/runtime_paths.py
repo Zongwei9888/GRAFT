@@ -103,15 +103,19 @@ def workspace_runtime_paths(workspace: Path) -> WorkspaceRuntimePaths:
     identifier = workspace_identifier(root)
     home = data_home()
     workspace_data = home / "workspaces" / identifier
+    # Protocol-v2 state is intentionally isolated from legacy runtimes. An old
+    # hook may still be started by Codex, but it cannot claim a v2 event or
+    # overwrite a v2 session before `graft doctor` guides the user to remove it.
+    protocol_data = workspace_data / "protocol-v2"
     return WorkspaceRuntimePaths(
         workspace=root,
         workspace_id=identifier,
         data_home=home,
         workspace_data=workspace_data,
-        state_dir=workspace_data / "sessions",
-        telemetry_dir=workspace_data / "telemetry",
-        reports_dir=workspace_data / "reports",
-        events_dir=workspace_data / "events",
-        baselines_dir=workspace_data / "baselines",
-        cost_history_dir=workspace_data / "cost-history",
+        state_dir=protocol_data / "sessions",
+        telemetry_dir=protocol_data / "telemetry",
+        reports_dir=protocol_data / "reports",
+        events_dir=protocol_data / "events",
+        baselines_dir=protocol_data / "baselines",
+        cost_history_dir=protocol_data / "cost-history",
     )

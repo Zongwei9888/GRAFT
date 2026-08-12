@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any
 
 
-def claim_event(events_dir: Path, event_name: str, event: dict[str, Any]) -> bool:
+def claim_event(
+    events_dir: Path,
+    event_name: str,
+    event: dict[str, Any],
+    *,
+    runtime_identity: dict[str, Any] | None = None,
+) -> bool:
     """Atomically claim an event so project and global hooks cannot run it twice."""
 
     identity = {
@@ -30,7 +36,8 @@ def claim_event(events_dir: Path, event_name: str, event: dict[str, Any]) -> boo
     except FileExistsError:
         return False
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        json.dump(identity, handle, ensure_ascii=False, sort_keys=True)
+        marker = {"identity": identity, "claimed_by": runtime_identity}
+        json.dump(marker, handle, ensure_ascii=False, sort_keys=True)
         handle.write("\n")
     _prune_old_markers(events_dir)
     return True

@@ -18,6 +18,12 @@ from graft.codex.global_install import (
     uninstall_global_hooks,
 )
 from graft.codex.session_state import SessionState, SessionStateStore
+from graft.codex.runtime_authority import (
+    AUTHORITY_ENV,
+    RuntimeIdentity,
+    inspect_runtime_sources,
+    resolve_runtime_authority,
+)
 from graft.configuration import (
     project_config_trust,
     resolve_config,
@@ -207,6 +213,98 @@ class GlobalRuntimeTests(unittest.TestCase):
             event = {"session_id": "s", "turn_id": "t", "prompt": "work"}
             self.assertTrue(claim_event(events, "UserPromptSubmit", event))
             self.assertFalse(claim_event(events, "UserPromptSubmit", event))
+
+    def test_explicit_authority_pin_is_independent_of_process_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            plugin = RuntimeIdentity("graft-plugin-v1", "plugin", "0.5.0", 2, "p")
+            repo = RuntimeIdentity("graft-repo-v1", "repo", "0.5.0", 2, "r")
+            with patch.dict(os.environ, {AUTHORITY_ENV: "graft-plugin-v1"}):
+                first = resolve_runtime_authority(workspace, repo)
+                second = resolve_runtime_authority(workspace, plugin)
+            self.assertFalse(first.authoritative)
+            self.assertTrue(second.authoritative)
+            self.assertEqual(first.authority_id, second.authority_id)
+
+    def test_runtime_audit_detects_legacy_global_and_selects_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "repo"
+            repo_codex = workspace / ".codex"
+            repo_codex.mkdir(parents=True)
+            (repo_codex / "hooks.json").write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            "Stop": [
+                                {
+                                    "hooks": [
+                                        {
+                                            "type": "command",
+                                            "command": (
+                                                "python .codex/hooks/stop_hook.py "
+                                                "--installation-id graft-repo-v1"
+                                            ),
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            codex_home = root / "codex-home"
+            codex_home.mkdir()
+            (codex_home / "hooks.json").write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            "Stop": [
+                                {
+                                    "hooks": [
+                                        {
+                                            "type": "command",
+                                            "command": (
+                                                "/missing/graft-hook stop "
+                                                "--installation-id graft-global-v1"
+                                            ),
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("graft.codex.runtime_authority._plugin_sources", return_value=[]):
+                audit = inspect_runtime_sources(workspace, codex_home=codex_home)
+            self.assertEqual(audit["selected_authority"], "graft-repo-v1")
+            self.assertFalse(audit["healthy"])
+            legacy = [item for item in audit["sources"] if item["source"] == "global"]
+            self.assertEqual(len(legacy), 1)
+            self.assertFalse(legacy[0]["compatible"])
+            self.assertTrue(audit["warnings"])
+
+    def test_protocol_v2_state_envelope_records_writer_and_isolates_legacy_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:
+            workspace = Path(directory)
+            identity = {
+                "installation_id": "graft-plugin-v1",
+                "distribution": "plugin",
+                "package_version": "0.5.0",
+                "protocol_version": 2,
+                "runtime_digest": "digest",
+            }
+            with patch.dict(os.environ, {"GRAFT_STATE_HOME": state}):
+                paths = workspace_runtime_paths(workspace)
+                self.assertIn("protocol-v2", str(paths.state_dir))
+                store = SessionStateStore(workspace, writer_runtime=identity)
+                store.save(SessionState(session_id="s"))
+                payload = json.loads((paths.state_dir / "s.json").read_text())
+            self.assertEqual(payload["state_schema_version"], 2)
+            self.assertEqual(payload["writer_runtime"], identity)
 
     def test_cli_link_is_idempotent_and_never_replaces_unrelated_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

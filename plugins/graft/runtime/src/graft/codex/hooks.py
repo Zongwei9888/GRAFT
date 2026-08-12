@@ -10,6 +10,11 @@ from typing import Any
 from graft.codex.checkpoint_policy import DefaultCheckpointPolicy
 from graft.codex.completion import CodexCompletionGate, CompletionGateError
 from graft.codex.event_dedup import claim_event
+from graft.codex.runtime_authority import (
+    RuntimeIdentity,
+    current_runtime_identity,
+    resolve_runtime_authority,
+)
 from graft.codex.session_state import SessionState, SessionStateStore, prompt_hash
 from graft.codex.telemetry import ProducerEvidenceLedger, record_from_hook_event
 from graft.cost_history import CostHistoryStore
@@ -41,16 +46,26 @@ def _emit(value: dict[str, Any]) -> int:
     return 0
 
 
-def user_prompt_submit() -> int:
+def user_prompt_submit(*, runtime_identity: RuntimeIdentity | None = None) -> int:
     event = _read_event()
     workspace = resolve_workspace(Path(str(event["cwd"])))
     paths = workspace_runtime_paths(workspace)
-    if not claim_event(paths.events_dir, "UserPromptSubmit", event):
+    identity = runtime_identity or current_runtime_identity("manual")
+    if not claim_event(
+        paths.events_dir,
+        "UserPromptSubmit",
+        event,
+        runtime_identity=identity.to_dict(),
+    ):
         return _emit({"continue": True})
     session_id = str(event.get("session_id", "unknown"))
     prompt = str(event.get("prompt", ""))
     tree_hash, files, file_hashes = hash_tree_manifest(workspace)
-    store = SessionStateStore(workspace, root=paths.state_dir)
+    store = SessionStateStore(
+        workspace,
+        root=paths.state_dir,
+        writer_runtime=identity.to_dict(),
+    )
     state = store.load(session_id)
     origin = store.record_prompt(state, prompt, tree_hash, files, file_hashes)
     if (
@@ -79,11 +94,17 @@ def user_prompt_submit() -> int:
     return _emit({"continue": True})
 
 
-def post_tool_use() -> int:
+def post_tool_use(*, runtime_identity: RuntimeIdentity | None = None) -> int:
     event = _read_event()
     workspace = resolve_workspace(Path(str(event["cwd"])))
     paths = workspace_runtime_paths(workspace)
-    if not claim_event(paths.events_dir, "PostToolUse", event):
+    identity = runtime_identity or current_runtime_identity("manual")
+    if not claim_event(
+        paths.events_dir,
+        "PostToolUse",
+        event,
+        runtime_identity=identity.to_dict(),
+    ):
         return _emit({"continue": True})
     session_id = str(event.get("session_id", "unknown"))
     state = SessionStateStore(workspace, root=paths.state_dir).load(session_id)
@@ -92,15 +113,25 @@ def post_tool_use() -> int:
     return _emit({"continue": True})
 
 
-def stop() -> int:
+def stop(*, runtime_identity: RuntimeIdentity | None = None) -> int:
     event = _read_event()
     workspace = resolve_workspace(Path(str(event["cwd"])))
     paths = workspace_runtime_paths(workspace)
-    if not claim_event(paths.events_dir, "Stop", event):
+    identity = runtime_identity or current_runtime_identity("manual")
+    if not claim_event(
+        paths.events_dir,
+        "Stop",
+        event,
+        runtime_identity=identity.to_dict(),
+    ):
         return _emit({"continue": True})
     try:
         session_id = str(event.get("session_id", "unknown"))
-        store = SessionStateStore(workspace, root=paths.state_dir)
+        store = SessionStateStore(
+            workspace,
+            root=paths.state_dir,
+            writer_runtime=identity.to_dict(),
+        )
         state = store.load(session_id)
         resolution = resolve_config(workspace)
         config = resolution.load()
@@ -308,12 +339,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("event", choices=("user-prompt", "post-tool", "stop"))
     parser.add_argument("--installation-id", default="manual")
     parsed = parser.parse_args(arguments)
+    identity = current_runtime_identity(parsed.installation_id)
     handlers = {
         "user-prompt": user_prompt_submit,
         "post-tool": post_tool_use,
         "stop": stop,
     }
-    return handlers[parsed.event]()
+    event = _read_event()
+    workspace = resolve_workspace(Path(str(event["cwd"])))
+    authority = resolve_runtime_authority(workspace, identity)
+    if not authority.authoritative:
+        return _emit({"continue": True})
+    # Handler functions own stdin parsing for direct testability. Reconstruct a
+    # JSON stream after authority discovery consumed the hook event.
+    sys.stdin = _JsonEventStream(event)
+    return handlers[parsed.event](runtime_identity=identity)
+
+
+class _JsonEventStream:
+    def __init__(self, event: dict[str, Any]) -> None:
+        self._event = event
+
+    def read(self, *args, **kwargs) -> str:
+        return json.dumps(self._event, ensure_ascii=False)
 
 
 def _record_decision_costs(

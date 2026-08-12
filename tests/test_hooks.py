@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from graft.codex import hooks
+from graft.codex.runtime_authority import AUTHORITY_ENV
 from graft.codex.session_state import SessionStateStore
 from graft.configuration import trust_project_config
 from graft.project_config import initialize_project
@@ -170,6 +171,35 @@ class HookReplayTests(unittest.TestCase):
                 self.assertNotEqual(
                     session_state.baseline_file_hashes["source.py"], original_digest
                 )
+
+    def test_non_authority_main_returns_before_claiming_or_writing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:
+            root = Path(directory)
+            event = {
+                "session_id": "shadow",
+                "turn_id": "prompt-shadow",
+                "cwd": str(root),
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Do not let the shadow runtime mutate state",
+            }
+            output = io.StringIO()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "GRAFT_STATE_HOME": state,
+                        AUTHORITY_ENV: "graft-plugin-v1",
+                    },
+                ),
+                patch.object(sys, "stdin", io.StringIO(json.dumps(event))),
+                redirect_stdout(output),
+            ):
+                result = hooks.main(
+                    ["user-prompt", "--installation-id", "graft-global-v1"]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(json.loads(output.getvalue()), {"continue": True})
+            self.assertFalse(list(Path(state).rglob("shadow.json")))
 
     def test_failure_continues_and_does_not_repeat_without_change(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as state:

@@ -211,6 +211,12 @@ Claims suitable for WSDM 2027 still require paired multi-task evaluation, calibr
 lineage ablations, budget curves, and comparison with native Codex, fixed checklists, single
 reviewers, pairwise diversity, and run-all verification.
 
+The pinned AgentRewardBench adapter in `experiments/agent_reward_bench` is the first offline
+selection-layer input. It provides expert labels plus multiple judgments over the same trajectories
+for correlated-error studies. It is not a coding-agent benchmark and cannot measure repair uplift;
+that claim still requires paired coding tasks. Full matrices fail closed on missing judge columns,
+while incomplete mode is only a schema smoke test.
+
 ## Safety boundaries
 
 - graph construction and semantic reviewers are fresh, read-only, ephemeral Codex sessions with

@@ -1,0 +1,43 @@
+{
+  "name": "AgentRewardBench",
+  "purpose": "offline selection-layer and correlated-judge calibration only",
+  "paper": "https://arxiv.org/abs/2504.08942",
+  "code": {
+    "url": "https://github.com/McGill-NLP/agent-reward-bench",
+    "commit": "f838338886d723d40b586309465a38277803d9e6"
+  },
+  "dataset": {
+    "url": "https://huggingface.co/datasets/McGill-NLP/agent-reward-bench",
+    "revision": "b6d17e646009d6cb63d5dd7be78807b680693f61",
+    "annotations_path": "agent_reward_bench/data/annotations.csv",
+    "judgments_path": "judgments"
+  },
+  "expected": {
+    "primary_trajectories": 1302,
+    "judges": 15
+  },
+  "judges": [
+    "functional",
+    "aer",
+    "aerv",
+    "nnetnav",
+    "claude-3.7-sonnet-noscreen",
+    "claude-3.7-sonnet-noaxtree",
+    "gpt-4o-mini",
+    "gpt-4o-mini-noaxtree",
+    "gpt-4o-mini-noscreen",
+    "gpt-4o-mini-noscreen-noaxtree",
+    "gpt-4o-noaxtree",
+    "gpt-4o-noscreen",
+    "qwen-2.5-vl-noaxtree",
+    "qwen-2.5-vl-noscreen",
+    "llama-3.3-70b-noscreen"
+  ],
+  "limitations": [
+    "This is a web-agent trajectory benchmark, not a coding-agent end-to-end benchmark.",
+    "It measures judge selection and correlated errors; it has no repair delta.",
+    "Judgment records have token and partial dollar cost but no comparable wall time.",
+    "Hidden coding benchmark labels must never be exposed to GRAFT online selection."
+  ],
+  "terms": "Research use is subject to the upstream fair-use Terms of Use; derivatives must retain those terms and no raw data is redistributed here."
+}

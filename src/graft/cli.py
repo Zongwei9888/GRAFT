@@ -14,6 +14,7 @@ from graft.codex.global_install import (
     provision_runtime,
     uninstall_global_hooks,
 )
+from graft.codex.runtime_authority import inspect_runtime_sources
 from graft.configuration import (
     project_config_trust,
     resolve_config,
@@ -272,6 +273,11 @@ def main(argv: list[str] | None = None) -> int:
         paths = workspace_runtime_paths(workspace)
         resolution = resolve_config(workspace)
         payload = inspect_global_hooks(codex_home=args.codex_home)
+        runtime_audit = inspect_runtime_sources(
+            workspace,
+            codex_home=args.codex_home,
+        )
+        payload["runtime_authority"] = runtime_audit
         payload["workspace"] = str(workspace)
         payload["workspace_id"] = paths.workspace_id
         payload["workspace_data"] = str(paths.workspace_data)
@@ -280,7 +286,8 @@ def main(argv: list[str] | None = None) -> int:
         payload["config_reason"] = resolution.reason
         payload["project_trust"] = to_jsonable(project_config_trust(workspace))
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0 if payload["graft_handlers"] == 3 and payload["runtime_commands_exist"] else 1
+        integration_present = bool(runtime_audit["sources"])
+        return 0 if integration_present and runtime_audit["healthy"] else 1
 
     if args.command == "init":
         workspace = resolve_workspace(args.repo)
