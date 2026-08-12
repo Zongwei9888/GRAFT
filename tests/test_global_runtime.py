@@ -35,6 +35,72 @@ from graft.runtime_paths import resolve_workspace, workspace_runtime_paths
 
 
 class GlobalRuntimeTests(unittest.TestCase):
+    def test_repository_hook_wrappers_supply_their_event_name(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        document = json.loads(
+            (project_root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "GRAFT_STATE_HOME": str(Path(directory) / "state"),
+                    "GRAFT_CONFIG_HOME": str(Path(directory) / "config"),
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                }
+            )
+            cases = (
+                (
+                    "UserPromptSubmit",
+                    {
+                        "session_id": "wrapper-smoke",
+                        "turn_id": "prompt-1",
+                        "cwd": str(project_root),
+                        "hook_event_name": "UserPromptSubmit",
+                        "prompt": "exercise the repository hook wrapper",
+                    },
+                ),
+                (
+                    "PostToolUse",
+                    {
+                        "session_id": "wrapper-smoke",
+                        "turn_id": "tool-1",
+                        "tool_use_id": "tool-use-1",
+                        "cwd": str(project_root),
+                        "hook_event_name": "PostToolUse",
+                        "tool_name": "Bash",
+                        "tool_input": {"command": "true"},
+                        "tool_response": {"exit_code": 0},
+                    },
+                ),
+                (
+                    "Stop",
+                    {
+                        "session_id": "wrapper-smoke",
+                        "turn_id": "stop-1",
+                        "cwd": str(project_root),
+                        "hook_event_name": "Stop",
+                        "stop_hook_active": False,
+                        "last_assistant_message": "waiting for more work",
+                    },
+                ),
+            )
+            for event_name, event in cases:
+                command = document["hooks"][event_name][0]["hooks"][0]["command"]
+                completed = subprocess.run(
+                    ["/bin/sh", "-c", command],
+                    input=json.dumps(event),
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=environment,
+                    cwd=project_root,
+                    timeout=20,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertTrue(json.loads(completed.stdout)["continue"])
+
     def test_install_is_idempotent_and_preserves_existing_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
