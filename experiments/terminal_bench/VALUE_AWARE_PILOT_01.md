@@ -28,6 +28,13 @@ replacement pilot result, a generalization result, or evidence that the selector
 quality. The smoke uses the unchanged GRAFT commit and official task evaluator; the online GRAFT
 stages do not read the evaluator implementation or output.
 
+That smoke is complete and recorded in
+[`VALUE_AWARE_POSTHOC_SMOKE_01.md`](VALUE_AWARE_POSTHOC_SMOKE_01.md). The final and exact first-Stop
+checkpoint both scored `1.0`, but GRAFT exhausted its wall-time budget during LLM modeling and
+planning, selected no verifier, returned `unresolved`, and sent no feedback. Consequently the
+same-trajectory feedback delta was `0.0`; this is an integration success and a negative selector
+diagnostic, not evidence of an effectiveness gain.
+
 ## Frozen method
 
 - GRAFT source commit: `692e756f029b1e0a9ca4cf911459dfef79381a22`
