@@ -21,6 +21,7 @@ class MatrixRow:
     trajectory_id: str
     benchmark: str
     task_id: str
+    agent: str
     label: int
     predictions: Mapping[str, int]
     metadata: Mapping[str, Mapping[str, Any]]
@@ -107,6 +108,7 @@ def load_matrix(path: Path) -> tuple[MatrixRow, ...]:
                     trajectory_id=str(raw["trajectory_id"]),
                     benchmark=str(raw["benchmark"]),
                     task_id=str(raw["task_id"]),
+                    agent=str(raw.get("agent", "unknown")),
                     label=label,
                     predictions=predictions,
                     metadata=metadata,
@@ -221,16 +223,23 @@ def run_protocol(
             )
             for method, portfolio in portfolios.items()
         }
-        oracle = _best(
-            tuple(
-                item for item in all_candidates if evaluate(test, item).set_fpr <= alpha
-            ),
-            lambda item: evaluate(test, item).recall,
-            test,
+        oracle_candidates = tuple(
+            item for item in all_candidates if evaluate(test, item).set_fpr <= alpha
         )
-        evaluated["exhaustive_test_oracle"] = _portfolio_payload(
-            oracle, development, test, evaluator_only=True
-        )
+        if oracle_candidates:
+            oracle = _best(
+                oracle_candidates,
+                lambda item: evaluate(test, item).recall,
+                test,
+            )
+            evaluated["exhaustive_test_oracle"] = _portfolio_payload(
+                oracle, development, test, evaluator_only=True
+            )
+        else:
+            evaluated["exhaustive_test_oracle"] = {
+                "status": "no_feasible_portfolio",
+                "evaluator_only": True,
+            }
         evaluated["run_all"] = _portfolio_payload(judges, development, test)
         comparator = str(protocol["selection"]["primary_baseline"])
         if comparator not in portfolios or comparator == "lineage_nominated_shrunk_high_order":

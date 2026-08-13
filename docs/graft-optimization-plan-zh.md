@@ -697,9 +697,32 @@ Codex 闭环：
 - 从现在到 abstract Gate，不能产生冻结数据表、置信区间或强基线对照的 UI、App Server、MCP、
   dashboard 和深度插件功能全部推迟。
 
-## 10. 最终一句话
+## 10. 冻结的一句话定义
 
 > GRAFT vNext 是一个位于 Codex 候选交付边界的、带资源 escrow 的顺序证据检索策略：LLM 动态理解
 > 未见任务和当前失败空间，系统相对 producer 已有证据估计继续计算的 VOC，只渐进展开可能改变
 > 停止/修复决策的图分支，并在真正考虑 verifier 组合时才校准其高阶共同失效；若不能形成正保守净值
 > 和可安全修复的可执行证据，它选择 No-Op 或诚实 abstain，而不是为了“多验证”而验证。
+
+## 11. 2026-08-13 AgentRewardBench 首次冻结结果
+
+冻结主实验已经打开一次 test，结果为 **Method NO-GO**，不能改阈值后覆盖：在预注册
+`set-FPR <= 0.10` 和 OR 检测规则下，15 个 judge 没有一个在 development 可行，因此 budget 1–4
+全部为 `no_feasible_portfolio`，无法进行 GRAFT high-order 与 Greedy MI 的主比较。
+
+事后诊断只用于定位原因：
+
+- independence 对 2/3/4 元组合的 test recall MAE 分别为 0.07875/0.07352/0.06240；pairwise 降至
+  0.01262/0.01111/0.01048，说明共同漏检不能按独立处理；
+- 当前 high-order 在 3/4 元组合上的 test MAE 为 0.01218/0.01226，反而劣于 pairwise；
+- 经验 residual 提名了 87/105 条 pair edge，使 360/455 个 triple 和 1000/1365 个 quadruple 被
+  修正；图过密，并在 development 上产生明显的同样本拟合；
+- pairwise 相对 independence 的优势只出现在 12 个 benchmark×cardinality strata 中的 6 个，说明
+  依赖结构随任务域变化，不能用一个全局图迁移；
+- development 只有 59 个成功样本，point-estimate set-FPR 无法可靠迁移到 test。
+
+因此下一版不能继续调整同一测试集上的阈值。新的协议只能把 lineage 当候选依赖的来源提名，在独立
+fold 上估计经验相关，并按任务域/难度校准；可行性必须采用不确定性上界。LLM review 仍然是动态
+verifier，但其输出是 finding proposal，只有 executable reproduction/authority promotion 才能阻断
+Codex。完整结果、artifact hash 与复现命令见
+`experiments/agent_reward_bench/RESULTS.md`。

@@ -42,4 +42,16 @@ agents for the same task cannot leak across the boundary. Deployable portfolios 
 development labels only. `exhaustive_test_oracle` is explicitly evaluator-only; it is never an
 online input or a deployable baseline.
 
+After the frozen result has been generated, reproduce the explicitly post-hoc diagnostics with:
+
+```bash
+python3 -m experiments.agent_reward_bench.analyze_selection \
+  --matrix /path/to/output/matrix.jsonl \
+  --output /path/to/output/selection-diagnostics.json
+```
+
+This reports independence/pairwise/high-order calibration error, graph density, development-to-test
+set-FPR retention, and a clearly labeled consensus-rule exploration. It does not amend the frozen
+primary protocol or turn exploratory findings into confirmatory evidence.
+
 No raw upstream trajectories or judgments are redistributed by this repository.
