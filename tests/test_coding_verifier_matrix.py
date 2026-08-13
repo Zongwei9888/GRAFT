@@ -246,11 +246,10 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         self.assertEqual(agent["model_name"], "gpt-5.6-sol")
         self.assertEqual(agent["kwargs"]["version"], "0.147.0")
         self.assertRegex(agent["kwargs"]["graft_commit"], r"^[0-9a-f]{40}$")
-        self.assertEqual(dataset["name"], "terminal-bench/terminal-bench")
-        self.assertEqual(dataset["ref"], "3.0.0")
         self.assertEqual(
-            dataset["task_names"], ["terminal-bench/cli-2ph-simplex"]
+            dataset["repo"], "harbor-framework/terminal-bench@v3.0.0"
         )
+        self.assertEqual(dataset["task_names"], ["cli-2ph-simplex"])
 
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (

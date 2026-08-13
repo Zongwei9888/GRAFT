@@ -20,10 +20,9 @@
   ],
   "datasets": [
     {
-      "name": "terminal-bench/terminal-bench",
-      "ref": "3.0.0",
+      "repo": "harbor-framework/terminal-bench@v3.0.0",
       "task_names": [
-        "terminal-bench/cli-2ph-simplex"
+        "cli-2ph-simplex"
       ]
     }
   ]

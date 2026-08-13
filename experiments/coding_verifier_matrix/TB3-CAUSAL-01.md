@@ -104,3 +104,15 @@ Interpretation is fixed:
 One task cannot establish WSDM-level effectiveness or graph causality. A positive result advances
 the method to a pre-registered multi-task shared-prefix study. A zero or negative result triggers
 mechanism diagnosis before any larger run.
+
+## Infrastructure amendment 01
+
+Frozen before any task container, Oracle, producer, or verifier executed: Harbor `0.20.0` failed
+while resolving the Hub package `terminal-bench/terminal-bench@3.0.0` because one returned
+`task_version.package` value was null. The failure occurred during dataset metadata parsing.
+
+The transport is therefore changed to Harbor's official Git-registry path
+`harbor-framework/terminal-bench@v3.0.0`, which resolves the already frozen Git commit above and
+discovers tasks from its `tasks/` tree. The task, public bytes, model, method, outcomes, and
+information boundary are unchanged. The failed package-resolution launch is an infrastructure
+attempt, not a trial.
