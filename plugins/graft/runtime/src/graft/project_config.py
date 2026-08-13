@@ -32,7 +32,7 @@ class ProjectToggleResult:
 def initialize_project(
     workspace: Path,
     *,
-    checkpoint_mode: str = "completion",
+    checkpoint_mode: str = "explicit",
     selection_policy: str = "original",
     verifier_network_access: bool = False,
     force: bool = False,

@@ -6,13 +6,17 @@ GRAFT resolves configuration in this order:
 2. the first matching user profile;
 3. the built-in domain-neutral `graft-original` registry.
 
-The third option works in any directory. Initialization is optional and never discovers a
-language-specific command checklist.
+The third option works in any directory. Because the automatic completion trigger and selector are
+not yet calibrated, the packaged fallback uses `checkpoint_mode: explicit`: ordinary chat and
+coding turns only cross the zero-model-cost hook boundary, and verification is considered only when
+the original task includes the exact `[graft:verify]` protocol token. Initialization is optional
+and never discovers a language-specific command checklist.
 
 ## Optional project override
 
 ```bash
-graft init
+graft init                              # safe explicit mode
+graft init --checkpoint-mode completion # controlled research mode
 graft config validate
 graft config trust
 graft status
@@ -55,7 +59,7 @@ graft config enable
 | `method` | `graft-original` or the opt-in `graft-value-aware` |
 | `enabled` | Project-level execution switch |
 | `budget` | Maximum nominal verifier cost; value-aware accumulates it per task epoch |
-| `checkpoint_mode` | `completion`, `strict`, or explicit protocol mode |
+| `checkpoint_mode` | `explicit` (safe default), or uncalibrated `completion`/`strict` research mode |
 | `max_feedback_rounds` | Bounded continuations within one task epoch |
 | `failure_policy` | `open` warns on unresolved; `closed` continues on unresolved |
 | `modeling` | Models, timeouts, prompt provenance, and the value-aware completion gate |

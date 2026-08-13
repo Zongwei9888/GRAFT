@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import statistics
@@ -134,6 +135,11 @@ def build_matrix(
                 "total_cost_usd": total_cost,
                 "model": payload.get("judge_model_name"),
                 "provider": payload.get("provider"),
+                "inputs": _judge_inputs(payload),
+                "system_prompt_hash": _system_prompt_hash(payload),
+                "oracle_family": (
+                    "functional" if judge == "functional" else "model_judge"
+                ),
             }
             seen[judge] += 1
             if total_cost is not None:
@@ -245,6 +251,30 @@ def _number(value: Any) -> float | None:
 
 def _integer(value: Any) -> int | None:
     return int(value) if isinstance(value, (int, float)) else None
+
+
+def _judge_inputs(payload: dict[str, Any]) -> dict[str, bool] | None:
+    raw = payload.get("judge_args")
+    if not isinstance(raw, dict):
+        return None
+    return {
+        "screenshot": bool(raw.get("use_screenshot", False)),
+        "axtree": bool(raw.get("use_axtree", False)),
+    }
+
+
+def _system_prompt_hash(payload: dict[str, Any]) -> str | None:
+    chat = payload.get("chat_messages")
+    regular = chat.get("regular") if isinstance(chat, dict) else None
+    if not isinstance(regular, list):
+        return None
+    for message in regular:
+        if not isinstance(message, dict) or message.get("role") != "system":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    return None
 
 
 if __name__ == "__main__":

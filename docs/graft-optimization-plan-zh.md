@@ -147,6 +147,34 @@ checkpoint”时考虑昂贵验证；提问、解释、中间进度、等待审�
 新信息。same-model self-review、detached Codex review 和 Codex 生成的测试可以同时有用，但它们共享
 模型、任务解释、repository context 或 oracle，不能被当成三份独立确认。
 
+### 3.4 触发协议修订（2026-08-13）
+
+Codex 调用 `Stop` Hook 与 GRAFT 购买验证计算是两个不同事件。Codex 当前不为 `Stop` 提供 matcher，
+所以每个 turn 都可能启动一个极轻量 Hook 进程；这不代表每个 turn 都应进行 TaskSketch、构图或运行
+verifier。冻结的分层资格协议为：
+
+```text
+Stop event
+→ L0 protocol/dedup gate
+→ L1 changed-artifact/checkpoint gate
+→ L2 LLM lifecycle + TaskSketch gate
+→ L3 VOC/resource gate
+→ verifier execution
+→ optional continuation and promotion
+```
+
+- `hello → 你好`、纯解释和没有 artifact 变化的 turn 必须在 L1 前后以零模型调用退出；
+- 中间进度、向用户提问、等待决定或外部阻塞必须由 L2 标为 `SKIP_NOT_ELIGIBLE`；
+- 只有 `ChangedArtifact ∧ NewCheckpoint ∧ CandidateComplete` 才具有 verification eligibility；
+- `eligible` 仍不等于 `verify`，L3 只有在 promotion pending 或保守 `VOC > 0` 且资源可行时购买证据；
+- 不使用语言、框架、任务名或 benchmark 关键词决定 eligibility；生命周期语义由 LLM 动态判断；
+- trigger 的 precision/recall、false trigger、漏触发、P95 latency 和成本是独立实验对象，不能由
+  selector 结果替代。
+
+在 trigger 与 selector 均未通过 held-out Gate 前，公开插件的内置 fallback 使用 `explicit` 模式；
+自动 `completion`/`strict` 仅用于受控实验或 reviewed project override。Hook 配置不得静态显示
+“正在验证”，因为运行时资格门尚未作出该决定。
+
 ## 4. vNext 算法：顺序信息获取而不是一次性全图选择
 
 ### 4.1 信息状态与动作

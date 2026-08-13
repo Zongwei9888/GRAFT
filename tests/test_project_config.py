@@ -26,6 +26,7 @@ class ProjectConfigTests(unittest.TestCase):
             )
             config = load_config(result.path)
             self.assertEqual(config.method, ORIGINAL_METHOD_ID)
+            self.assertEqual(config.checkpoint_mode, "explicit")
             self.assertTrue(config.enabled)
             raw = json.loads(result.path.read_text(encoding="utf-8"))
             encoded = json.dumps(raw, ensure_ascii=False).lower()

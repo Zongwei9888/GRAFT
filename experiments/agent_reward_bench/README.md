@@ -25,4 +25,19 @@ Outputs:
   tokens and recorded dollar cost;
 - `audit.json`: coverage, parse failures, cost availability and pinned provenance.
 
+Before inspecting held-out judge outcomes, the group split, budgets, set-FPR, high-order shrinkage,
+lineage nomination rule, primary baseline, and bootstrap procedure were frozen in `protocol.json`.
+Run the selection experiment only on a complete matrix:
+
+```bash
+python3 -m experiments.agent_reward_bench.run_selection \
+  --matrix /path/to/output/matrix.jsonl \
+  --output /path/to/output/selection-results.json
+```
+
+The development/test split hashes `benchmark + task_id`, so trajectories from different producer
+agents for the same task cannot leak across the boundary. Deployable portfolios are selected from
+development labels only. `exhaustive_test_oracle` is explicitly evaluator-only; it is never an
+online input or a deployable baseline.
+
 No raw upstream trajectories or judgments are redistributed by this repository.

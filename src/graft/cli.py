@@ -97,7 +97,11 @@ def _parser() -> argparse.ArgumentParser:
     initialize.add_argument(
         "--checkpoint-mode",
         choices=("completion", "strict", "explicit"),
-        default="completion",
+        default="explicit",
+        help=(
+            "Use explicit opt-in by default; completion/strict are research modes until "
+            "their trigger policy is calibrated"
+        ),
     )
     initialize.add_argument(
         "--selection-policy",
@@ -326,6 +330,7 @@ def main(argv: list[str] | None = None) -> int:
         config = resolution.load()
         payload["method"] = config.method
         payload["enabled"] = config.enabled
+        payload["checkpoint_mode"] = config.checkpoint_mode
         payload["verifier_templates"] = [
             item.template_id for item in config.verifier_templates
         ]

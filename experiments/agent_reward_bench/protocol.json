@@ -1,0 +1,51 @@
+{
+  "protocol_version": 1,
+  "frozen_at": "2026-08-13",
+  "dataset_revision": "b6d17e646009d6cb63d5dd7be78807b680693f61",
+  "unit": "trajectory",
+  "group_key": ["benchmark", "task_id"],
+  "split": {
+    "method": "sha256_mod_100",
+    "salt": "graft-arb-selection-v1",
+    "development_buckets": [0, 15],
+    "test_buckets": [15, 100]
+  },
+  "outcome": {
+    "positive_event": "expert-labeled unsuccessful trajectory",
+    "detected_when": "at least one selected judge predicts unsuccessful",
+    "false_reject_when": "at least one selected judge predicts unsuccessful for an expert-labeled successful trajectory"
+  },
+  "primary_constraints": {
+    "cardinality_budgets": [1, 2, 3, 4],
+    "set_fpr": 0.1
+  },
+  "secondary_constraints": {
+    "set_fpr": [0.05],
+    "cost": "development-set median total tokens when available"
+  },
+  "selection": {
+    "test_labels_visible": false,
+    "missing_judgment_policy": "fail_closed",
+    "tie_break": ["lower_development_fpr", "lower_cost", "lexicographic_ids"],
+    "high_order_prior_strength": 8.0,
+    "lineage_pair_overlap_threshold": 2,
+    "pair_residual_nomination_threshold": 0.05,
+    "primary_baseline": "greedy_mutual_information"
+  },
+  "baselines": [
+    "best_single",
+    "topk_individual",
+    "independent",
+    "pairwise",
+    "greedy_mutual_information",
+    "run_all",
+    "exhaustive_test_oracle"
+  ],
+  "method": "lineage_nominated_shrunk_high_order",
+  "inference": {
+    "paired_group_bootstrap_samples": 2000,
+    "confidence_level": 0.95,
+    "primary_comparison": "method minus the preregistered greedy_mutual_information baseline at matched budget and development set-FPR"
+  },
+  "claim_boundary": "Selection-layer evidence only; no Codex repair or coding resolve-rate claim."
+}

@@ -329,7 +329,10 @@ def default_original_config_payload(*, enabled: bool = True) -> dict[str, Any]:
         "method": ORIGINAL_METHOD_ID,
         "enabled": enabled,
         "budget": 4.0 if enabled else 0.0,
-        "checkpoint_mode": "completion",
+        # The packaged fallback is intentionally opt-in while the automatic lifecycle
+        # trigger and selector remain research hypotheses. Projects and controlled
+        # experiments can explicitly choose completion mode.
+        "checkpoint_mode": "explicit",
         "max_feedback_rounds": 2,
         "failure_policy": "open",
         "environment_fingerprint": "graft-original-dynamic-v3-grounded-runtime",

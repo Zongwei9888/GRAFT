@@ -47,10 +47,21 @@ class RepositoryHookConfigurationTests(unittest.TestCase):
             self.assertIn(event, arguments)
             self.assertLess(arguments.index(event), arguments.index("--installation-id"))
 
+    def test_stop_hook_does_not_claim_verification_before_runtime_gate(self) -> None:
+        project_root = Path(__file__).resolve().parents[1]
+        handler = json.loads(
+            (project_root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        )["hooks"]["Stop"][0]["hooks"][0]
+        self.assertNotIn("statusMessage", handler)
+
 
 class HookReplayTests(unittest.TestCase):
     def _config(self, root: Path, *, selection_policy: str = "original") -> None:
-        initialize_project(root, selection_policy=selection_policy)
+        initialize_project(
+            root,
+            selection_policy=selection_policy,
+            checkpoint_mode="completion",
+        )
         trust_project_config(root)
 
     def _graph(

@@ -170,6 +170,7 @@ class GlobalRuntimeTests(unittest.TestCase):
                 default = resolve_config(workspace)
                 self.assertEqual(default.source, "graft-original-default")
                 self.assertEqual(default.load().method, ORIGINAL_METHOD_ID)
+                self.assertEqual(default.load().checkpoint_mode, "explicit")
                 subprocess.run(
                     ["git", "init", "-q", str(workspace)], check=True
                 )

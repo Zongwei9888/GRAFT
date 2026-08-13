@@ -76,6 +76,7 @@ class AgentRewardBenchAdapterTests(unittest.TestCase):
                         "judge": "judge-a",
                         "judge_model_name": "model-a",
                         "provider": "provider-a",
+                        "judge_args": {"use_screenshot": True, "use_axtree": False},
                         "cost": {"total_price": 0.01},
                         "response": {
                             "choices": [
@@ -92,6 +93,13 @@ class AgentRewardBenchAdapterTests(unittest.TestCase):
             self.assertTrue(rows[0]["judgments"]["judge-a"]["correct"])
             self.assertEqual(audit["median_total_tokens"]["judge-a"], 123)
             self.assertEqual(audit["median_total_cost_usd"]["judge-a"], 0.01)
+            self.assertEqual(
+                rows[0]["judgments"]["judge-a"]["inputs"],
+                {"screenshot": True, "axtree": False},
+            )
+            self.assertEqual(
+                rows[0]["judgments"]["judge-a"]["oracle_family"], "model_judge"
+            )
 
     def test_unknown_label_fails_closed(self) -> None:
         with self.assertRaises(ValueError):

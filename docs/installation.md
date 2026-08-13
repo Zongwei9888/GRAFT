@@ -76,6 +76,10 @@ graft status
 Plugin-only users can ask Codex: `Show the GRAFT status for this workspace`. No per-project
 initialization is required; the dynamic registry works in arbitrary directories.
 
+The packaged fallback is intentionally explicit while automatic triggering is being evaluated. Add
+`[graft:verify]` to the original coding request to opt in, or create a reviewed project override
+with `graft init --checkpoint-mode completion` only for controlled research runs.
+
 `graft doctor` also enumerates repository, plugin, and compatibility user-hook runtimes. If more
 than one is enabled, it reports the deterministic authority and any legacy/incompatible source.
 Repository development hooks take precedence inside that checkout; the plugin is authoritative in

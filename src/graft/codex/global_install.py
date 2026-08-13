@@ -160,7 +160,6 @@ def install_global_hooks(
                     executable,
                     "stop",
                     timeout=600,
-                    status_message="GRAFT is verifying this checkpoint",
                 )
             ]
         }

@@ -1,6 +1,6 @@
 ---
 name: graft-verification
-description: Inspect, configure, enable, disable, or explain the GRAFT verification governor for Codex, including the frozen Original baseline and opt-in value-aware policy. Use when the user asks about GRAFT status, dynamic verifier construction, checkpoint evidence, reports, or project policy. Lifecycle hooks run automatically during ordinary coding tasks.
+description: Inspect, configure, enable, disable, or explain the GRAFT verification governor for Codex, including the frozen Original baseline and opt-in value-aware policy. Use when the user asks about GRAFT status, dynamic verifier construction, checkpoint evidence, reports, or project policy. Hooks observe lifecycle boundaries; packaged verification is explicit until automatic triggering is calibrated.
 ---
 
 # GRAFT Verification Governor
@@ -20,11 +20,15 @@ python3 <plugin-root>/scripts/graft_plugin.py cli config validate --repo .
 python3 <plugin-root>/scripts/graft_plugin.py cli verify --repo . --requirement "..."
 ```
 
-Normal use in an arbitrary directory needs no initialization. Only run `cli init` when the user
-asks for a versioned project override of budgets, models, policies, or general verifier templates:
+Normal use in an arbitrary directory needs no initialization. The packaged fallback is explicit:
+the original coding request must contain the exact `[graft:verify]` protocol token before GRAFT can
+purchase verification. `completion` and `strict` are controlled research modes, not proven product
+defaults. Only run `cli init` when the user asks for a versioned project override of budgets,
+models, policies, or general verifier templates:
 
 ```bash
 python3 <plugin-root>/scripts/graft_plugin.py cli init --repo .
+python3 <plugin-root>/scripts/graft_plugin.py cli init --repo . --checkpoint-mode completion
 python3 <plugin-root>/scripts/graft_plugin.py cli init --repo . --selection-policy value-aware
 ```
 

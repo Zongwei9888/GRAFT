@@ -93,8 +93,9 @@ codex plugin add graft@graft
 ```
 
 Start a new Codex thread, open `/hooks`, inspect and trust the three GRAFT hook definitions. GRAFT
-then uses its domain-neutral default in Git and non-Git directories alike. No `graft init` is
-required for normal use.
+then uses its domain-neutral fallback in Git and non-Git directories alike. That fallback is
+currently `explicit`: add `[graft:verify]` to the original coding request to opt in while automatic
+triggering remains an uncalibrated research component. No `graft init` is required.
 
 Use installation as the global switch:
 
@@ -106,7 +107,8 @@ codex plugin add graft@graft     # on globally
 Optional project overrides change budgets, models, policies, or general verifier templates:
 
 ```bash
-graft init
+graft init                              # explicit, safe default
+graft init --checkpoint-mode completion # controlled research mode
 graft config validate
 graft config trust
 graft config disable             # off only here
