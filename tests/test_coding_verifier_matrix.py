@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,9 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
     materialize_config,
     select_unique_workspace,
 )
+from experiments.coding_verifier_matrix.continuation_replay import (
+    restore_candidate,
+)
 from graft.registry import load_config
 from graft.schema import RunConfig
 
@@ -20,6 +24,40 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_candidate_archive_restores_exact_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            archives = root / "archives"
+            repo.mkdir()
+            (repo / "kept.txt").write_text("before\n", encoding="utf-8")
+            (repo / "deleted.txt").write_text("delete\n", encoding="utf-8")
+            baseline = capture_baseline(repo, root / "baselines")
+
+            (repo / "kept.txt").write_text("after\n", encoding="utf-8")
+            (repo / "deleted.txt").unlink()
+            (repo / "added.txt").write_text("added\n", encoding="utf-8")
+            candidate = capture_baseline(repo, archives)
+            archive = Path(candidate["archive_path"])
+
+            (repo / "kept.txt").write_text("before\n", encoding="utf-8")
+            (repo / "deleted.txt").write_text("delete\n", encoding="utf-8")
+            (repo / "added.txt").unlink()
+            baseline_path = root / "baseline.json"
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+
+            restored = restore_candidate(
+                repo,
+                archive,
+                archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                baseline_path=baseline_path,
+                expected_tree=candidate["tree_hash"],
+            )
+            self.assertEqual(restored["status"], "restored")
+            self.assertEqual((repo / "kept.txt").read_text(), "after\n")
+            self.assertEqual((repo / "added.txt").read_text(), "added\n")
+            self.assertFalse((repo / "deleted.txt").exists())
+
     def test_outer_container_runner_only_disables_sandbox_for_a_copy(self) -> None:
         runner = OuterContainerCopyCodexRunner(Path("/producer"))
         config = runner.copy_config(
