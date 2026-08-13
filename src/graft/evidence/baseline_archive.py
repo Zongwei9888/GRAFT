@@ -17,6 +17,7 @@ BASELINE_METADATA = "baseline.json"
 MAX_DIFF_CHARS = 48_000
 MAX_DIFF_FILE_BYTES = 256 * 1024
 MAX_ARCHIVE_BYTES = 8 * 1024 * 1024
+MAX_FULL_ARCHIVE_BYTES = 256 * 1024 * 1024
 
 
 def archive_baseline(
@@ -28,6 +29,7 @@ def archive_baseline(
     archive_root: Path,
     session_id: str,
     task_epoch: int,
+    include_binary: bool = False,
 ) -> Path:
     """Persist the task-start source outside the producer workspace.
 
@@ -68,14 +70,19 @@ def archive_baseline(
                     continue
                 try:
                     content = source.read_bytes()
-                    if (
-                        len(content) > MAX_DIFF_FILE_BYTES
-                        or archived_bytes + len(content) > MAX_ARCHIVE_BYTES
-                        or b"\0" in content
-                    ):
-                        skipped.append(relative)
-                        continue
-                    content.decode("utf-8")
+                    if include_binary:
+                        if archived_bytes + len(content) > MAX_FULL_ARCHIVE_BYTES:
+                            skipped.append(relative)
+                            continue
+                    else:
+                        if (
+                            len(content) > MAX_DIFF_FILE_BYTES
+                            or archived_bytes + len(content) > MAX_ARCHIVE_BYTES
+                            or b"\0" in content
+                        ):
+                            skipped.append(relative)
+                            continue
+                        content.decode("utf-8")
                     info = archive.gettarinfo(
                         str(source),
                         arcname=(PurePosixPath("baseline") / pure).as_posix(),
@@ -95,7 +102,13 @@ def archive_baseline(
                         "tree_hash": tree_hash,
                         "files": list(files),
                         "file_hashes": dict(file_hashes),
-                        "archived_text_bytes": archived_bytes,
+                        "archive_mode": (
+                            "full-regular-files-v1" if include_binary else "text-v1"
+                        ),
+                        "archived_bytes": archived_bytes,
+                        "archived_text_bytes": (
+                            None if include_binary else archived_bytes
+                        ),
                         "skipped_files": sorted(skipped),
                     },
                     ensure_ascii=False,

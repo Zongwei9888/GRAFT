@@ -807,8 +807,9 @@ archive 跳过三个数据库和一个 gateway 文件。之后 7 个 shadow veri
 无法隔离 service-backed task。shadow 后官方得分为 `0.0`，但状态已污染，既不能作为 first-candidate
 分数，也不能作为 GRAFT feedback 分数，整行必须 censor。
 
-已增加与任务无关的 preflight：候选 archive 只要存在任何 `skipped_files`，就在 LLM 构图和 verifier
-运行前返回 `candidate_not_replayable`，保留原 candidate 给官方 evaluator。第二个 cohort producer 暂停，
-避免在已知失效的隔离上继续花费。要恢复 service-backed 实验，必须让每个 verifier 获得完整任务环境与
-服务状态分支，而不是只复制工作目录；branch 中的 `/app` 与服务 endpoint 不能回到 producer。
+已增加与任务无关的 bounded full-file archive 与 preflight：普通 binary candidate file 现在可精确归档；
+若 changed/new file 仍因 symlink 或 256 MB 总上限无法归档，则在 LLM 构图和 verifier 运行前返回
+`candidate_not_replayable`，保留原 candidate 给官方 evaluator。第二个 cohort producer 暂停，避免在已知
+失效的隔离上继续花费。要恢复 service-backed 实验，必须让每个 verifier 获得完整任务环境与服务状态
+分支，而不是只复制工作目录；branch 中的 `/app` 与服务 endpoint 不能回到 producer。
 完整记录见 `experiments/coding_verifier_matrix/TB3-COHORT-02-INTERIM.md`。

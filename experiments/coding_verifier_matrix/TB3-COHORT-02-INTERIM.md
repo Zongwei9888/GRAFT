@@ -57,9 +57,13 @@ finding or continuation existed. The entire row is censored as an isolation fail
 The second cohort producer is paused. Repeating the same file-copy matrix on another service-backed
 task would spend model budget without a valid causal boundary.
 
-The experiment harness now stops before LLM graph construction whenever the candidate archive
-skips any file. In that case the original candidate proceeds directly to the official evaluator,
-so data are not contaminated, but the row supplies no verifier matrix. Service-backed verification
-requires cloning the complete task environment and service state for each verifier branch, with no
-route from branch `/app` or service endpoints to the producer. That is the next infrastructure
-gate; it must be implemented before resuming this cohort.
+The experiment harness now creates a bounded full regular-file candidate archive, including binary
+outputs, and stops before LLM graph construction whenever a changed/new candidate file still cannot
+be archived (for example a symlink or an archive beyond the 256 MB bound). Unchanged baseline files
+do not make a candidate unreplayable. In a stopped row the original candidate proceeds directly to
+the official evaluator, so data are not contaminated, but the row supplies no verifier matrix.
+
+This does not solve service isolation. Service-backed verification requires cloning the complete
+task environment and service state for each verifier branch, with no route from branch `/app` or
+service endpoints to the producer. That is a separate infrastructure gate and must be implemented
+before resuming this cohort.

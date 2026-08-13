@@ -20,6 +20,8 @@ from experiments.coding_verifier_matrix.continuation_replay import (
     feedback_packet,
     restore_candidate,
 )
+from graft.evidence.baseline_archive import archive_baseline
+from graft.evidence.snapshot import hash_tree_manifest
 from graft.registry import default_original_config_payload, load_config
 from graft.schema import (
     Behavior,
@@ -172,7 +174,7 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             repo.mkdir()
             (repo / "source.txt").write_text("before\n", encoding="utf-8")
             baseline = capture_baseline(repo, root / "baselines")
-            (repo / "state.db").write_bytes(b"SQLite format 3\x00binary-state")
+            (repo / "state.db").symlink_to("/var/lib/task-state.db")
             config_path = root / "config.json"
             config_path.write_text(
                 json.dumps(materialize_config("gpt-5.6-sol")), encoding="utf-8"
@@ -190,7 +192,45 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             self.assertEqual(result["status"], "candidate_not_replayable")
             self.assertEqual(result["verifier_count"], 0)
             self.assertEqual(result["candidate_archive_skipped_files"], ["state.db"])
+            self.assertEqual(result["unreplayable_changed_files"], ["state.db"])
             self.assertNotIn("graph", result)
+
+    def test_full_candidate_archive_restores_binary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / "source.txt").write_text("before\n", encoding="utf-8")
+            baseline = capture_baseline(repo, root / "baselines")
+            binary = b"SQLite format 3\x00" + bytes(range(256))
+            (repo / "state.db").write_bytes(binary)
+            _, files, hashes = hash_tree_manifest(repo)
+            archive = archive_baseline(
+                repo,
+                files=files,
+                file_hashes=hashes,
+                tree_hash=hash_tree_manifest(repo)[0],
+                archive_root=root / "candidate-archives",
+                session_id="binary-candidate",
+                task_epoch=1,
+                include_binary=True,
+            )
+            expected_tree = hash_tree_manifest(repo)[0]
+            (repo / "state.db").unlink()
+            baseline_path = root / "baseline.json"
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+
+            restored = restore_candidate(
+                repo,
+                archive,
+                archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                baseline_path=baseline_path,
+                expected_tree=expected_tree,
+            )
+
+            self.assertEqual(restored["status"], "restored")
+            self.assertEqual((repo / "state.db").read_bytes(), binary)
+            self.assertEqual(restored["skipped_file_count"], 0)
 
     def test_outer_container_runner_only_disables_sandbox_for_a_copy(self) -> None:
         runner = OuterContainerCopyCodexRunner(Path("/producer"))

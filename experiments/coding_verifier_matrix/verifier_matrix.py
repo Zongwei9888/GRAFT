@@ -254,8 +254,12 @@ def run_matrix(
         archive_root=candidate_archive_root,
         session_id="coding-verifier-matrix-candidate",
         task_epoch=1,
+        include_binary=True,
     )
     skipped_candidate_files = _archive_skipped_files(candidate_archive)
+    unreplayable_changed_files = tuple(
+        sorted(set(skipped_candidate_files) & set(changed))
+    )
     common = {
         "version": 1,
         "experiment": "coding-verifier-matrix",
@@ -270,6 +274,7 @@ def run_matrix(
         "candidate_archive_path": str(candidate_archive),
         "candidate_archive_sha256": _sha256_file(candidate_archive),
         "candidate_archive_skipped_files": list(skipped_candidate_files),
+        "unreplayable_changed_files": list(unreplayable_changed_files),
         "config_source": "frozen_experiment_config",
         "config_hash": snapshot.config_hash,
         "official_evaluator_visible": False,
@@ -283,7 +288,7 @@ def run_matrix(
     }
     if not changed:
         return {**common, "status": "no_candidate_change", "verifier_count": 0}
-    if skipped_candidate_files:
+    if unreplayable_changed_files:
         return {
             **common,
             "status": "candidate_not_replayable",
