@@ -91,6 +91,7 @@ def build_matrix(
     rows: list[dict[str, Any]] = []
     missing = Counter()
     parse_failures = Counter()
+    abstentions = Counter()
     costs: dict[str, list[float]] = defaultdict(list)
     tokens: dict[str, list[int]] = defaultdict(list)
     seen = Counter()
@@ -116,20 +117,36 @@ def build_matrix(
                 continue
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
-                prediction = parse_judgment_success(payload, judge)
-            except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            except (OSError, json.JSONDecodeError):
                 parse_failures[judge] += 1
                 row_complete = False
                 continue
+            try:
+                raw_prediction: int | None = parse_judgment_success(payload, judge)
+                effective_prediction = raw_prediction
+                parse_status = "ok"
+            except (KeyError, TypeError, ValueError):
+                # A completed verifier call that cannot produce the required verdict is an
+                # abstention. In GRAFT, abstention cannot become blocking evidence, so the
+                # conservative effective prediction is "no failure detected" while its cost
+                # and lineage remain observable.
+                raw_prediction = None
+                effective_prediction = 1
+                parse_status = "abstain"
+                abstentions[judge] += 1
             response = payload.get("response") if isinstance(payload, dict) else None
             usage = response.get("usage", {}) if isinstance(response, dict) else {}
             cost = payload.get("cost", {}) if isinstance(payload, dict) else {}
             total_cost = _number(cost.get("total_price")) if isinstance(cost, dict) else None
             total_tokens = _integer(usage.get("total_tokens")) if isinstance(usage, dict) else None
             row["judgments"][judge] = {
-                "prediction": prediction,
+                "prediction": effective_prediction,
+                "raw_prediction": raw_prediction,
+                "parse_status": parse_status,
                 "correct": (
-                    prediction == row["label"] if row["label"] is not None else None
+                    raw_prediction == row["label"]
+                    if raw_prediction is not None and row["label"] is not None
+                    else None
                 ),
                 "total_tokens": total_tokens,
                 "total_cost_usd": total_cost,
@@ -156,6 +173,7 @@ def build_matrix(
         "judgment_counts": dict(sorted(seen.items())),
         "missing_judgments": dict(sorted(missing.items())),
         "parse_failures": dict(sorted(parse_failures.items())),
+        "abstentions": dict(sorted(abstentions.items())),
         "median_total_tokens": {
             judge: statistics.median(values) for judge, values in sorted(tokens.items())
         },

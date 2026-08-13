@@ -1,5 +1,5 @@
 {
-  "protocol_version": 1,
+  "protocol_version": 2,
   "frozen_at": "2026-08-13",
   "dataset_revision": "b6d17e646009d6cb63d5dd7be78807b680693f61",
   "unit": "trajectory",
@@ -25,7 +25,8 @@
   },
   "selection": {
     "test_labels_visible": false,
-    "missing_judgment_policy": "fail_closed",
+    "missing_judgment_policy": "fail_closed_before_selection",
+    "abstention_policy": "retain cost and lineage; effective verdict is no failure detected; never count as a correct judgment",
     "tie_break": ["lower_development_fpr", "lower_cost", "lexicographic_ids"],
     "high_order_prior_strength": 8.0,
     "lineage_pair_overlap_threshold": 2,
@@ -47,5 +48,12 @@
     "confidence_level": 0.95,
     "primary_comparison": "method minus the preregistered greedy_mutual_information baseline at matched budget and development set-FPR"
   },
-  "claim_boundary": "Selection-layer evidence only; no Codex repair or coding resolve-rate claim."
+  "claim_boundary": "Selection-layer evidence only; no Codex repair or coding resolve-rate claim.",
+  "amendments": [
+    {
+      "date": "2026-08-13",
+      "reason": "Schema smoke found a present judge output outside its required binary schema before the complete test matrix was opened.",
+      "change": "Separate missing files from verifier abstention. Missing files still fail matrix construction; abstention retains observed cost but supplies no blocking detection evidence."
+    }
+  ]
 }

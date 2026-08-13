@@ -105,6 +105,47 @@ class AgentRewardBenchAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_binary_label("maybe")
 
+    def test_present_nonbinary_judge_output_becomes_costed_abstention(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            annotation = {
+                "benchmark": "web",
+                "task_id": "task.1",
+                "model_name": "agent",
+                "trajectory_success": "Unsuccessful",
+            }
+            judgment = root / "web" / "agent" / "judge-a" / "task.1.json"
+            judgment.parent.mkdir(parents=True)
+            judgment.write_text(
+                json.dumps(
+                    {
+                        "judge": "judge-a",
+                        "judge_model_name": "model-a",
+                        "provider": "provider-a",
+                        "cost": {"total_price": 0.02},
+                        "response": {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "content": "<success>Somewhat Successful</success>"
+                                    }
+                                }
+                            ],
+                            "usage": {"total_tokens": 200},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rows, audit = build_matrix([annotation], root, ["judge-a"])
+            parsed = rows[0]["judgments"]["judge-a"]
+            self.assertEqual(parsed["prediction"], 1)
+            self.assertIsNone(parsed["raw_prediction"])
+            self.assertEqual(parsed["parse_status"], "abstain")
+            self.assertIsNone(parsed["correct"])
+            self.assertEqual(audit["abstentions"], {"judge-a": 1})
+            self.assertEqual(audit["complete_rows"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

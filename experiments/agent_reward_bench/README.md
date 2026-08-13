@@ -15,7 +15,9 @@ python3 -m experiments.agent_reward_bench.build_matrix \
   --output /path/to/output
 ```
 
-The normal command fails closed unless all 1,302 primary trajectories have all 15 judge columns.
+The normal command fails closed unless all 1,302 primary trajectories have all 15 judge files.
+A present response outside the required binary schema is retained as an abstention: its cost and
+lineage remain, but it contributes no failure detection and is never counted as a correct judgment.
 `--allow-incomplete` exists only for schema smoke tests and marks `complete: false`; incomplete
 outputs are not paper results.
 
