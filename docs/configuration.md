@@ -72,7 +72,11 @@ The runtime modeler creates Behaviors and Failure Modes. The planner creates con
 objectives, prompts, target edges, actionable-detection estimates, lineage additions, and
 shared-blind-spot scenarios. “Detection” here means producing evidence eligible for Stop feedback,
 not simply expressing a source-level concern. Non-blocking candidates therefore contribute zero
-Stop-gating utility. These task instances do not belong in a static project config.
+Stop-gating utility. On the value-aware research path, the planner must also declare generic
+evidence routes: authority origin, standalone transport, dependency origins, availability, and
+limitations. A deterministic preflight excludes routes that depend on verifier-only state before
+the selector prices them; execution still performs the final event, portability, requirement, and
+checkpoint checks. These task instances do not belong in a static project config.
 
 The machine-readable schemas are in [`schemas/`](../schemas/). Config version 1 is intentionally
 rejected by the product loader because it represented the fixed-fixture prototype.

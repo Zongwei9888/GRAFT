@@ -4,6 +4,11 @@ All notable changes follow semantic versioning.
 
 ## Unreleased
 
+- add a value-aware `EvidenceCapabilityPreflight` that excludes verifier-only dependencies,
+  unavailable authority, non-durable artifacts, and non-standalone transports before selection;
+- bind eligible value-aware findings to hashed `ReproductionBundle` records containing the exact
+  checkpoint, canonical replay command, expected/actual outcomes, failure modes, route, and lineage;
+- retain separate planner/verdict schemas for frozen Original and the evidence-aware research path;
 - preserve the frozen Original path while adding an explicit `graft-value-aware` policy;
 - classify lifecycle completion with an isolated structured LLM before expensive verification;
 - record bounded redacted producer evidence and supply it to task modeling and verifier planning;

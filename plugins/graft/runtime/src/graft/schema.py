@@ -36,6 +36,19 @@ class PromotionOutcome(str, Enum):
     UNRESOLVED = "unresolved"
 
 
+class EvidenceRouteAvailability(str, Enum):
+    AVAILABLE = "available"
+    UNCERTAIN = "uncertain"
+    UNAVAILABLE = "unavailable"
+
+
+class EvidenceCapabilityDisposition(str, Enum):
+    ELIGIBLE = "eligible"
+    ADVISORY = "advisory"
+    UNAVAILABLE = "unavailable"
+    INVALID = "invalid"
+
+
 @dataclass(frozen=True)
 class StageCost:
     stage_id: str
@@ -120,6 +133,31 @@ class VerifierValueEstimate:
 
 
 @dataclass(frozen=True)
+class PlannedEvidenceRoute:
+    route_id: str
+    availability: EvidenceRouteAvailability
+    oracle_origin: str
+    transport: str
+    dependency_origins: tuple[str, ...]
+    reason: str
+
+
+@dataclass(frozen=True)
+class EvidenceCapability:
+    verifier_id: str
+    routes: tuple[PlannedEvidenceRoute, ...]
+    limitations: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class EvidenceCapabilityAssessment:
+    verifier_id: str
+    disposition: EvidenceCapabilityDisposition
+    eligible_route_ids: tuple[str, ...] = ()
+    reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class EvidenceItem:
     kind: str
     observation: str
@@ -129,6 +167,12 @@ class EvidenceItem:
     failure_modes: tuple[str, ...] = ()
     requirement_refs: tuple[str, ...] = ()
     oracle_origin: str = "unspecified"
+
+
+@dataclass(frozen=True)
+class EvidenceAwareEvidenceItem(EvidenceItem):
+    expected: str | None = None
+    actual: str | None = None
 
 
 @dataclass(frozen=True)
@@ -164,6 +208,26 @@ class Lineage:
             for item in sorted(set(self.modality) & set(other.modality))
         )
         return tuple(shared)
+
+
+@dataclass(frozen=True)
+class ReproductionBundle:
+    bundle_id: str
+    checkpoint_key: str
+    verifier_id: str
+    failure_modes: tuple[str, ...]
+    oracle_origin: str
+    evidence_kind: str
+    transport: str
+    observation: str
+    expected: str | None
+    actual: str | None
+    command: tuple[str, ...]
+    artifact_path: str | None
+    requirement_refs: tuple[str, ...]
+    route_id: str
+    dependency_origins: tuple[str, ...]
+    lineage: Lineage
 
 
 @dataclass(frozen=True)
@@ -270,6 +334,12 @@ class FeedbackGraph:
 
 
 @dataclass(frozen=True)
+class EvidenceAwareFeedbackGraph(FeedbackGraph):
+    evidence_capabilities: tuple[EvidenceCapability, ...] = ()
+    evidence_capability_assessments: tuple[EvidenceCapabilityAssessment, ...] = ()
+
+
+@dataclass(frozen=True)
 class SourceSnapshot:
     root: str
     tree_hash: str
@@ -322,6 +392,11 @@ class VerifierResult:
     estimated_cost_usd: float | None = None
     executed_evidence: bool = False
     promotion_outcome: PromotionOutcome | None = None
+
+
+@dataclass(frozen=True)
+class EvidenceAwareVerifierResult(VerifierResult):
+    reproduction_bundles: tuple[ReproductionBundle, ...] = ()
 
 
 @dataclass(frozen=True)

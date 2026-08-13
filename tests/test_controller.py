@@ -11,11 +11,15 @@ from graft.registry import load_config
 from graft.schema import (
     Behavior,
     DecisionKind,
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapability,
     EvidenceItem,
+    EvidenceRouteAvailability,
     FailureMode,
     FeedbackGraph,
     PromotionRequirement,
     PromotionOutcome,
+    PlannedEvidenceRoute,
     Selection,
     Verdict,
     VerifierResult,
@@ -24,7 +28,10 @@ from graft.schema import (
 
 
 def feedback_graph(
-    source_hash: str, *, uncertainties: tuple[str, ...] = ()
+    source_hash: str,
+    *,
+    uncertainties: tuple[str, ...] = (),
+    evidence_aware: bool = False,
 ) -> FeedbackGraph:
     spec = VerifierSpec(
         verifier_id="dynamic-review",
@@ -36,7 +43,8 @@ def feedback_graph(
         prompt="seek an observable counterexample",
         estimated_detection={"f1": 0.9},
     )
-    return FeedbackGraph(
+    graph_type = EvidenceAwareFeedbackGraph if evidence_aware else FeedbackGraph
+    graph = graph_type(
         source_hash=source_hash,
         behaviors=(Behavior("b1", "the requested value is correct", (), ("value",), 1, 1, 0),),
         failure_modes=(
@@ -46,6 +54,26 @@ def feedback_graph(
         shared_blind_spots=(),
         uncertainties=uncertainties,
     )
+    if isinstance(graph, EvidenceAwareFeedbackGraph):
+        return replace(
+            graph,
+            evidence_capabilities=(
+                EvidenceCapability(
+                    verifier_id=spec.verifier_id,
+                    routes=(
+                        PlannedEvidenceRoute(
+                            route_id="test-runtime",
+                            availability=EvidenceRouteAvailability.AVAILABLE,
+                            oracle_origin="authoritative_runtime",
+                            transport="standalone_command",
+                            dependency_origins=("task_environment",),
+                            reason="test fixture route",
+                        ),
+                    ),
+                ),
+            ),
+        )
+    return graph
 
 
 class GraphBuilder:
@@ -64,7 +92,9 @@ class GraphBuilder:
     ):
         self.requirements = requirements
         return feedback_graph(
-            snapshot.checkpoint_key, uncertainties=self.uncertainties
+            snapshot.checkpoint_key,
+            uncertainties=self.uncertainties,
+            evidence_aware=config.selection.strategy == "value-aware",
         )
 
 

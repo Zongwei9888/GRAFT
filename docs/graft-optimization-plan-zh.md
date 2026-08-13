@@ -813,3 +813,36 @@ archive 跳过三个数据库和一个 gateway 文件。之后 7 个 shadow veri
 失效的隔离上继续花费。要恢复 service-backed 实验，必须让每个 verifier 获得完整任务环境与服务状态
 分支，而不是只复制工作目录；branch 中的 `/app` 与服务 endpoint 不能回到 producer。
 完整记录见 `experiments/coding_verifier_matrix/TB3-COHORT-02-INTERIM.md`。
+
+## 16. 2026-08-13 VF2 分支关闭后的证据能力修订
+
+冻结 VF2 verifier plan 的两个完成分支都发现了具体问题，但最终命令依赖 verifier 分支中的
+`/tmp/nx342` 临时安装。旧路径直到执行结束才发现证据不可迁移，导致 selector 事前把“能发现问题”和
+“能把可复现证据送回 producer”当成同一种价值。该行因其余分支 timeout/基础设施失败仍然删失，不能
+用来主张效果；完整记录见 `experiments/coding_verifier_matrix/AMENDMENT-05.md`。
+
+现已实现一个与任务、语言、框架和 benchmark 无关的 vNext 安全前置层，但**没有**实现完整的
+progressive VOC 算法：
+
+1. value-aware planner 使用独立 schema，为每个候选声明开放任务下的 evidence route，包括 authority、
+   transport、dependency origin、availability 与 limitation；Original 继续使用冻结 schema 和 prompt；
+2. `EvidenceCapabilityPreflight` 在 selector 前只保留具有合格 authority、standalone command transport，
+   且不依赖 verifier temporary state、网络安装或未知外部状态的 blocking route；
+3. LLM 声明 `available` 不是事实证据。执行后仍必须匹配真实 command event、原始 requirement/baseline
+   authority、frozen checkpoint 与 portability guard；
+4. 通过的结果被规范化为哈希绑定的 `ReproductionBundle`，包含 checkpoint、failure mode、exact replay
+   argv、expected/actual、route、dependency origin 与 lineage；feedback 和 promotion 只消费该 bundle；
+5. 简单 shell wrapper 会被安全解包，verifier-copy 内的绝对 candidate 路径会改写为 producer 相对路径；
+   compound shell、environment assignment、临时文件和 copy 外绝对路径继续拒绝；
+6. 尚未实现可持久化 artifact capture，所以 screenshot/runtime artifact route 当前只能 advisory/abstain，
+   不能伪装成可重放 blocking evidence。
+
+代码与 plugin runtime 已有 172 个全仓单元测试通过。这只证明协议机制与回归边界成立，不证明 GRAFT
+提高任务成功率。下一步仍须在不改变冻结 VF2 candidate/requirements 的前提下做机制回放，然后在新的
+前瞻任务上比较 Native、Original、value-aware-v1 与 evidence-aware treatment；旧删失行不得补成正结果。
+
+冻结机制回放现已完成：两个 finding 的 canonical replay argv 均为空，`ReproductionBundle` 数为 0；在
+显式、仅用于诊断的 `verifier_workspace` dependency 声明下，preflight eligible 数同样为 0。该结果没有
+模型调用、没有 producer continuation，也没有改写旧 treatment，详见
+`experiments/coding_verifier_matrix/AMENDMENT-06.md`。因此下一步不再继续修补该删失行，而是先冻结新的
+前瞻对照协议。

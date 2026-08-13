@@ -26,6 +26,7 @@ from experiments.coding_verifier_matrix.continuation_replay import (
     restore_candidate,
 )
 from graft.evidence.baseline_archive import archive_baseline
+from graft.evidence.reproduction import canonical_reproduction_argv
 from graft.evidence.snapshot import hash_tree_manifest
 from graft.registry import default_original_config_payload, load_config
 from graft.schema import (
@@ -42,6 +43,54 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_frozen_vf2_findings_cannot_form_reproduction_bundles(self) -> None:
+        experiment = PROJECT_ROOT / "experiments" / "coding_verifier_matrix"
+        candidate_path = (
+            experiment
+            / "jobs"
+            / "tb3-vf2-candidate-capture-v3"
+            / "vf2-speedup-networkx__ibjLp6F"
+            / "agent"
+            / "verifier-candidate.json"
+        )
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            hashlib.sha256(candidate_path.read_bytes()).hexdigest(),
+            "71fb790b5938c768afe799a808bbe31dfed5d07114edc6d10e1d66a8101ddbb3",
+        )
+        findings = []
+        branch_root = experiment / "jobs" / "tb3-vf2-verifier-branches-v1"
+        for path in sorted(branch_root.glob("*/agent/verifier-branch.json")):
+            result = json.loads(path.read_text(encoding="utf-8"))["result"]
+            findings.extend(
+                (result["verifier_id"], item)
+                for item in result.get("evidence", [])
+                if item.get("failure_modes")
+            )
+        self.assertEqual(
+            [(verifier_id, item["failure_modes"]) for verifier_id, item in findings],
+            [
+                ("agentic-evidence-02", ["F11"]),
+                ("adversarial-test-01", ["F02"]),
+            ],
+        )
+        frozen_files = frozenset(candidate["candidate_files"])
+        for _, item in findings:
+            self.assertIsNone(
+                canonical_reproduction_argv(
+                    tuple(item["command"]),
+                    frozen_files=frozen_files,
+                    run_root=Path("/app"),
+                )
+            )
+        replay = json.loads(
+            (experiment / "VF2-EVIDENCE-REPLAY-01.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(replay["portable_bundle_count"], 0)
+        self.assertEqual(replay["preflight_eligible_count"], 0)
+
     def test_legacy_copy_matrix_fails_closed_on_absolute_workspace_contract(
         self,
     ) -> None:

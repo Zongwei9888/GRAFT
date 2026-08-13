@@ -29,6 +29,7 @@ from graft.schema import (
     CompletionState,
     Decision,
     DecisionKind,
+    EvidenceAwareVerifierResult,
     PromotionRequirement,
     Verdict,
 )
@@ -422,6 +423,13 @@ def _promotion_from_decision(decision: Decision) -> PromotionRequirement:
             behavior = behaviors.get(failure.behavior_id)
             if behavior is not None:
                 behavior_descriptions.append(behavior.description)
+        if isinstance(result, EvidenceAwareVerifierResult):
+            for bundle in result.reproduction_bundles:
+                if bundle.observation:
+                    observations.append(bundle.observation)
+                if bundle.command:
+                    commands.append(bundle.command)
+            continue
         if result.command:
             commands.append(result.command)
         for item in result.evidence:

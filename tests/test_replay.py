@@ -10,8 +10,14 @@ from graft.registry import load_config
 from graft.replay import ReplayInputError, load_report_graph, replay_selection
 from graft.schema import (
     Behavior,
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapability,
+    EvidenceCapabilityAssessment,
+    EvidenceCapabilityDisposition,
+    EvidenceRouteAvailability,
     FailureMode,
     FeedbackGraph,
+    PlannedEvidenceRoute,
     VerifierSpec,
     VerifierValueEstimate,
     to_jsonable,
@@ -39,6 +45,48 @@ class ReplayTests(unittest.TestCase):
             report.write_text("{}", encoding="utf-8")
             with self.assertRaises(ReplayInputError):
                 load_report_graph(report)
+
+    def test_evidence_aware_replay_preserves_preflight_exclusion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config_path = initialize_project(
+                root, selection_policy="value-aware"
+            ).path
+            base = _graph()
+            graph = EvidenceAwareFeedbackGraph(
+                **base.__dict__,
+                evidence_capabilities=(
+                    EvidenceCapability(
+                        "dynamic",
+                        (
+                            PlannedEvidenceRoute(
+                                "temporary-route",
+                                EvidenceRouteAvailability.AVAILABLE,
+                                "requirement_derived_runtime",
+                                "standalone_command",
+                                ("verifier_workspace",),
+                                "depends on disposable state",
+                            ),
+                        ),
+                    ),
+                ),
+                evidence_capability_assessments=(
+                    EvidenceCapabilityAssessment(
+                        "dynamic",
+                        EvidenceCapabilityDisposition.UNAVAILABLE,
+                        reasons=("non-portable dependency",),
+                    ),
+                ),
+            )
+            report = root / "evidence-aware-report.json"
+            report.write_text(
+                json.dumps({"graph": to_jsonable(graph)}), encoding="utf-8"
+            )
+            loaded = load_report_graph(report)
+            self.assertIsInstance(loaded, EvidenceAwareFeedbackGraph)
+            selection = replay_selection(report, load_config(config_path))
+            self.assertEqual(selection.verifier_ids, ())
+            self.assertFalse(selection.feasible)
 
 
 def _graph() -> FeedbackGraph:

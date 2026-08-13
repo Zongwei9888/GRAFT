@@ -18,6 +18,8 @@ producer session
                               ↓
           Behavior–Failure–Verifier–Lineage hypergraph
                               ↓
+          value-aware: EvidenceCapabilityPreflight
+                              ↓
        Original detection selector OR value-aware/No-Op selector
                               ↓
                      isolated verifier execution
@@ -52,6 +54,14 @@ risk-weighted detection benefit still uses the high-order graph, then subtracts 
 execution and repair-regression costs. Greedy marginal net value is compared against a formal
 No-Op candidate with value zero. This is a provisional decision model pending held-out calibration,
 not a correctness probability.
+
+The value-aware path now separates discovery capability from feedback capability. Before selection,
+each blocking verifier must have at least one task-dynamic route whose authority can support
+feedback, whose final transport is a standalone command, and whose dependencies already belong to
+the task environment, frozen candidate, or unchanged baseline. After execution, GRAFT binds the
+observed event, canonical replay argv, expected/actual observation, route, lineage, failure modes,
+and checkpoint into a hashed `ReproductionBundle`. The preflight declaration is an LLM planning
+claim, not evidence; the post-execution guard remains authoritative.
 
 Task-epoch state accumulates nominal verifier budget, measured wall time, known model cost and a
 count of stages whose model cost is unavailable. Cost history is stored by stable generic verifier

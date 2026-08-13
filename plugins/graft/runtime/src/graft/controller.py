@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 from graft.cost_history import HistoricalCostEstimate
+from graft.evidence.capability import preflight_evidence_capabilities
 from graft.evidence.snapshot import freeze_source
 from graft.modeling import (
     CodexFeedbackGraphBuilder,
@@ -18,6 +19,9 @@ from graft.registry import GraftConfig, load_config
 from graft.schema import (
     Decision,
     DecisionKind,
+    EvidenceAwareFeedbackGraph,
+    EvidenceAwareVerifierResult,
+    EvidenceCapabilityDisposition,
     FeedbackGraph,
     ProducerEvidenceSummary,
     PromotionOutcome,
@@ -164,8 +168,23 @@ class GraftController:
                 ),
                 session_id,
             )
-        if self.config.selection.strategy == "value-aware" and historical_costs:
-            graph = _apply_historical_costs(graph, historical_costs)
+        if self.config.selection.strategy == "value-aware":
+            if not isinstance(graph, EvidenceAwareFeedbackGraph):
+                return self._finish(
+                    Decision(
+                        kind=DecisionKind.UNRESOLVED,
+                        reason=(
+                            "The vNext graph omitted EvidenceCapability declarations; GRAFT "
+                            "will not price verifier discovery as executable Stop evidence."
+                        ),
+                        snapshot=source,
+                        graph=graph,
+                    ),
+                    session_id,
+                )
+            graph = preflight_evidence_capabilities(graph, source)
+            if historical_costs:
+                graph = _apply_historical_costs(graph, historical_costs)
 
         try:
             selection_budget = (
@@ -223,6 +242,19 @@ class GraftController:
                     reason = (
                         "The repaired candidate requires prior-feedback revalidation, but no "
                         "eligible promotion verifier fits the remaining task-epoch budget."
+                    )
+                elif (
+                    isinstance(graph, EvidenceAwareFeedbackGraph)
+                    and graph.evidence_capability_assessments
+                    and not any(
+                        item.disposition == EvidenceCapabilityDisposition.ELIGIBLE
+                        for item in graph.evidence_capability_assessments
+                    )
+                ):
+                    reason = (
+                        "No blocking verifier passed EvidenceCapabilityPreflight. GRAFT "
+                        "abstained before execution because the planned evidence routes were "
+                        "advisory, unavailable, invalid, or not durably replayable."
                     )
                 else:
                     reason = (
@@ -363,20 +395,32 @@ class GraftController:
                     if behavior is not None:
                         lines.append(f"  Violated behavior: {behavior.description}")
                     lines.append(f"  Failure mode: {failure.description}")
-                reproductions = [
-                    " ".join(item.command)
-                    for item in result.evidence
-                    if item.command
-                    and item.oracle_origin
-                    in {
-                        "authoritative_runtime",
-                        "baseline_repository",
-                        "requirement_derived_runtime",
-                    }
-                    and set(item.failure_modes) & set(result.failure_modes)
-                ]
-                if result.command:
-                    reproductions.append(" ".join(result.command))
+                if isinstance(result, EvidenceAwareVerifierResult):
+                    reproductions = [
+                        " ".join(bundle.command)
+                        for bundle in result.reproduction_bundles
+                        if bundle.command
+                    ]
+                    for bundle in result.reproduction_bundles:
+                        if bundle.expected is not None:
+                            lines.append(f"  Expected: {bundle.expected}")
+                        if bundle.actual is not None:
+                            lines.append(f"  Actual: {bundle.actual}")
+                else:
+                    reproductions = [
+                        " ".join(item.command)
+                        for item in result.evidence
+                        if item.command
+                        and item.oracle_origin
+                        in {
+                            "authoritative_runtime",
+                            "baseline_repository",
+                            "requirement_derived_runtime",
+                        }
+                        and set(item.failure_modes) & set(result.failure_modes)
+                    ]
+                    if result.command:
+                        reproductions.append(" ".join(result.command))
                 if reproductions:
                     lines.append(f"  Reproduce: {reproductions[0]}")
             lines.append(

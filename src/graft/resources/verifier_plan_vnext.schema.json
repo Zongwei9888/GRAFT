@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GRAFT evidence-aware dynamic verifier plan",
+  "type": "object",
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "template_id": {"type": "string", "minLength": 1},
+          "target_failure_modes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "objective": {"type": "string", "minLength": 1},
+          "prompt": {"type": "string", "minLength": 1},
+          "estimated_detection": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "failure_mode_id": {"type": "string", "minLength": 1},
+                "probability": {"type": "number", "minimum": 0, "maximum": 1}
+              },
+              "required": ["failure_mode_id", "probability"],
+              "additionalProperties": false
+            }
+          },
+          "additional_context_sources": {"type": "array", "items": {"type": "string"}},
+          "additional_modalities": {"type": "array", "items": {"type": "string"}},
+          "oracle": {"type": ["string", "null"]},
+          "value_estimate": {
+            "type": ["object", "null"],
+            "properties": {
+              "actionability": {"type": "number", "minimum": 0, "maximum": 1},
+              "repair_success": {"type": "number", "minimum": 0, "maximum": 1},
+              "regression_risk": {"type": "number", "minimum": 0, "maximum": 1},
+              "producer_evidence_overlap": {"type": "number", "minimum": 0, "maximum": 1},
+              "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+              "predicted_duration_s": {"type": ["number", "null"], "exclusiveMinimum": 0},
+              "predicted_model_cost_usd": {"type": ["number", "null"], "minimum": 0}
+            },
+            "required": [
+              "actionability",
+              "repair_success",
+              "regression_risk",
+              "producer_evidence_overlap",
+              "confidence",
+              "predicted_duration_s",
+              "predicted_model_cost_usd"
+            ],
+            "additionalProperties": false
+          },
+          "revalidates_feedback": {"type": "boolean"},
+          "evidence_capability": {
+            "type": "object",
+            "properties": {
+              "routes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string", "minLength": 1},
+                    "availability": {"type": "string", "enum": ["available", "uncertain", "unavailable"]},
+                    "oracle_origin": {
+                      "type": "string",
+                      "enum": [
+                        "authoritative_runtime",
+                        "baseline_repository",
+                        "requirement_derived_runtime",
+                        "candidate_repository",
+                        "verifier_generated",
+                        "source_inspection",
+                        "unavailable"
+                      ]
+                    },
+                    "transport": {
+                      "type": "string",
+                      "enum": [
+                        "standalone_command",
+                        "runtime_artifact",
+                        "verifier_generated_artifact",
+                        "compound_shell",
+                        "unavailable"
+                      ]
+                    },
+                    "dependency_origins": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "task_environment",
+                          "frozen_candidate",
+                          "unchanged_baseline",
+                          "verifier_workspace",
+                          "network",
+                          "external_unpinned",
+                          "unknown"
+                        ]
+                      }
+                    },
+                    "reason": {"type": "string", "minLength": 1}
+                  },
+                  "required": ["id", "availability", "oracle_origin", "transport", "dependency_origins", "reason"],
+                  "additionalProperties": false
+                }
+              },
+              "limitations": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["routes", "limitations"],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "template_id",
+          "target_failure_modes",
+          "objective",
+          "prompt",
+          "estimated_detection",
+          "additional_context_sources",
+          "additional_modalities",
+          "oracle",
+          "value_estimate",
+          "revalidates_feedback",
+          "evidence_capability"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "shared_blind_spots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "weight": {"type": "number", "minimum": 0, "maximum": 1},
+          "affected_verifiers": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+          "failure_modes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "residual_detection": {"type": "number", "minimum": 0, "maximum": 1},
+          "sources": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+        },
+        "required": ["id", "description", "weight", "affected_verifiers", "failure_modes", "residual_detection", "sources"],
+        "additionalProperties": false
+      }
+    },
+    "coverage_gaps": {"type": "array", "items": {"type": "string"}}
+  },
+  "required": ["candidates", "shared_blind_spots", "coverage_gaps"],
+  "additionalProperties": false
+}

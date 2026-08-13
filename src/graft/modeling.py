@@ -13,9 +13,13 @@ from graft.evidence.snapshot import freeze_source
 from graft.registry import GraftConfig, ModelStageConfig
 from graft.schema import (
     Behavior,
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapability,
+    EvidenceRouteAvailability,
     FailureMode,
     FeedbackGraph,
     Lineage,
+    PlannedEvidenceRoute,
     ProducerEvidenceSummary,
     PromotionRequirement,
     RunConfig,
@@ -96,14 +100,21 @@ class CodexFeedbackGraphBuilder:
             config_path,
             config,
             stage=config.verifier_planner,
-            schema_name="verifier_plan.schema.json",
+            schema_name=(
+                "verifier_plan_vnext.schema.json"
+                if config.selection.strategy == "value-aware"
+                else "verifier_plan.schema.json"
+            ),
         )
-        verifiers, blind_spots, gaps = _parse_verifier_plan(
+        verifiers, blind_spots, gaps, evidence_capabilities = _parse_verifier_plan(
             plan_raw,
             analysis,
             config.verifier_templates,
             require_value_estimates=config.selection.strategy == "value-aware",
             require_promotion=promotion is not None,
+            require_evidence_capabilities=(
+                config.selection.strategy == "value-aware"
+            ),
         )
         uncertainties = tuple(
             dict.fromkeys(
@@ -120,7 +131,12 @@ class CodexFeedbackGraphBuilder:
                     "verifier planner omitted the required high-order blind-spot model for "
                     f"shared lineage: {', '.join(shared)}"
                 )
-        return FeedbackGraph(
+        graph_type = (
+            EvidenceAwareFeedbackGraph
+            if config.selection.strategy == "value-aware"
+            else FeedbackGraph
+        )
+        graph = graph_type(
             source_hash=snapshot.checkpoint_key,
             behaviors=analysis.behaviors,
             failure_modes=analysis.failure_modes,
@@ -132,6 +148,9 @@ class CodexFeedbackGraphBuilder:
             promotion=promotion,
             method=config.method,
         )
+        if isinstance(graph, EvidenceAwareFeedbackGraph):
+            return replace(graph, evidence_capabilities=evidence_capabilities)
+        return graph
 
     def _run_structured(
         self,
@@ -309,6 +328,18 @@ For each candidate, also estimate actionability, probability that the producer c
 finding correctly, regression risk from likely repair, overlap with producer evidence, estimate
 confidence, expected duration, and expected model cost when applicable. These estimates must be
 task-conditional and conservative. They are decision estimates, not correctness evidence.
+
+For each candidate, declare evidence_capability routes before selection. A route describes how the
+verifier could return evidence to the producer after its disposable workspace is destroyed; it is
+not a command and is not evidence that the task is correct. Mark a route available only when its
+oracle can authorize blocking feedback and its final standalone command can run using dependencies
+already in the task environment, frozen candidate, or unchanged baseline. A verifier-created file,
+temporary installation, network installation, compound shell program, source-only opinion, or
+runtime artifact that is not durably captured is not a portable route. Mark such routes uncertain
+or unavailable and report the limitation. The current product protocol supports
+standalone_command as a blocking transport; other transports remain advisory until durable capture
+exists. If no portable route is available, its Stop-gating detection probability must be zero even
+when the verifier may discover a useful suspicion.
 """
         evidence_section = (
             "\nProducer evidence already collected in this task epoch:\n"
@@ -452,11 +483,18 @@ def _parse_verifier_plan(
     *,
     require_value_estimates: bool = False,
     require_promotion: bool = False,
-) -> tuple[tuple[VerifierSpec, ...], tuple[SharedBlindSpot, ...], tuple[str, ...]]:
+    require_evidence_capabilities: bool = False,
+) -> tuple[
+    tuple[VerifierSpec, ...],
+    tuple[SharedBlindSpot, ...],
+    tuple[str, ...],
+    tuple[EvidenceCapability, ...],
+]:
     by_template = {item.template_id: item for item in templates}
     failure_ids = {item.failure_mode_id for item in analysis.failure_modes}
     counts: dict[str, int] = {}
     verifiers: list[VerifierSpec] = []
+    evidence_capabilities: list[EvidenceCapability] = []
     verifier_ids: set[str] = set()
     for item in raw.get("candidates", []):
         if not isinstance(item, Mapping):
@@ -532,6 +570,15 @@ def _parse_verifier_plan(
                 f"verifier {identifier} requires a value_estimate"
             )
         value_estimate = _parse_value_estimate(raw_value, identifier)
+        raw_capability = item.get("evidence_capability")
+        if require_evidence_capabilities and not isinstance(raw_capability, Mapping):
+            raise FeedbackGraphBuildError(
+                f"verifier {identifier} requires an evidence_capability declaration"
+            )
+        if isinstance(raw_capability, Mapping):
+            evidence_capabilities.append(
+                _parse_evidence_capability(raw_capability, identifier)
+            )
         candidate = VerifierSpec(
             verifier_id=identifier,
             kind=template.kind,
@@ -608,6 +655,53 @@ def _parse_verifier_plan(
         tuple(verifiers),
         tuple(blind_spots),
         tuple_of_strings(raw.get("coverage_gaps")),
+        tuple(evidence_capabilities),
+    )
+
+
+def _parse_evidence_capability(
+    raw: Mapping[str, Any], verifier_id: str
+) -> EvidenceCapability:
+    raw_routes = raw.get("routes")
+    if not isinstance(raw_routes, list) or not raw_routes:
+        raise FeedbackGraphBuildError(
+            f"verifier {verifier_id} evidence_capability requires routes"
+        )
+    routes: list[PlannedEvidenceRoute] = []
+    route_ids: set[str] = set()
+    for item in raw_routes:
+        if not isinstance(item, Mapping):
+            raise FeedbackGraphBuildError(
+                f"verifier {verifier_id} evidence route is not an object"
+            )
+        route_id = str(item.get("id", "")).strip()
+        if not route_id or route_id in route_ids:
+            raise FeedbackGraphBuildError(
+                f"verifier {verifier_id} has an invalid or duplicate evidence route id"
+            )
+        route_ids.add(route_id)
+        try:
+            availability = EvidenceRouteAvailability(str(item["availability"]))
+        except (KeyError, ValueError) as exc:
+            raise FeedbackGraphBuildError(
+                f"verifier {verifier_id} route {route_id} has invalid availability"
+            ) from exc
+        routes.append(
+            PlannedEvidenceRoute(
+                route_id=route_id,
+                availability=availability,
+                oracle_origin=str(item.get("oracle_origin", "unavailable")),
+                transport=str(item.get("transport", "unavailable")),
+                dependency_origins=tuple_of_strings(
+                    item.get("dependency_origins")
+                ),
+                reason=str(item.get("reason", "")),
+            )
+        )
+    return EvidenceCapability(
+        verifier_id=verifier_id,
+        routes=tuple(routes),
+        limitations=tuple_of_strings(raw.get("limitations")),
     )
 
 

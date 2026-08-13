@@ -75,6 +75,22 @@ class StructuredRunner:
                     "predicted_model_cost_usd": 0.1,
                 }
                 candidates[0]["revalidates_feedback"] = False
+                candidates[0]["evidence_capability"] = {
+                    "routes": [
+                        {
+                            "id": "runtime-command",
+                            "availability": "available",
+                            "oracle_origin": "requirement_derived_runtime",
+                            "transport": "standalone_command",
+                            "dependency_origins": [
+                                "task_environment",
+                                "frozen_candidate",
+                            ],
+                            "reason": "the candidate can be exercised directly",
+                        }
+                    ],
+                    "limitations": [],
+                }
             if self.duplicate_candidate:
                 candidates.append({**candidates[0], "id": "visual-runtime-probe-2"})
             response = {
@@ -188,8 +204,16 @@ class ModelingTests(unittest.TestCase):
             )
             self.assertEqual(graph.producer_evidence, evidence)
             self.assertEqual(graph.verifiers[0].value_estimate.actionability, 0.8)
+            self.assertEqual(
+                graph.evidence_capabilities[0].routes[0].route_id,
+                "runtime-command",
+            )
             self.assertIn("./existing-check", runner.calls[0][0])
             self.assertIn("overlap with producer evidence", runner.calls[1][0])
+            self.assertEqual(
+                runner.calls[1][2].output_schema.name,
+                "verifier_plan_vnext.schema.json",
+            )
 
 
 if __name__ == "__main__":

@@ -22,8 +22,12 @@ from graft.schema import (
     Behavior,
     CompletionAssessment,
     CompletionState,
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapability,
+    EvidenceRouteAvailability,
     FailureMode,
     FeedbackGraph,
+    PlannedEvidenceRoute,
     VerifierSpec,
     VerifierValueEstimate,
 )
@@ -94,13 +98,34 @@ class HookReplayTests(unittest.TestCase):
                 else VerifierValueEstimate()
             ),
         )
-        return FeedbackGraph(
+        graph_type = EvidenceAwareFeedbackGraph if value_aware else FeedbackGraph
+        graph = graph_type(
             source_hash=source_hash,
             behaviors=(Behavior("b", "requested behavior", (), ("result",), 1, 1, 0),),
             failure_modes=(FailureMode("f", "b", "behavior fails", "task", (), (), 1),),
             verifiers=(verifier,),
             shared_blind_spots=(),
         )
+        if isinstance(graph, EvidenceAwareFeedbackGraph):
+            return replace(
+                graph,
+                evidence_capabilities=(
+                    EvidenceCapability(
+                        verifier_id=verifier.verifier_id,
+                        routes=(
+                            PlannedEvidenceRoute(
+                                route_id="configured-command",
+                                availability=EvidenceRouteAvailability.AVAILABLE,
+                                oracle_origin="requirement_derived_runtime",
+                                transport="standalone_command",
+                                dependency_origins=("task_environment",),
+                                reason="the configured command is self-contained",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        return graph
 
     def _call(self, function, event: dict) -> dict:
         output = io.StringIO()
@@ -399,13 +424,15 @@ class HookReplayTests(unittest.TestCase):
                     ),
                     patch(
                         "graft.controller.CodexFeedbackGraphBuilder.build",
-                        side_effect=lambda snapshot, requirements, config, **kwargs: FeedbackGraph(
+                        side_effect=lambda snapshot, requirements, config, **kwargs: EvidenceAwareFeedbackGraph(
                             source_hash=snapshot.checkpoint_key,
                             behaviors=low_value.behaviors,
                             failure_modes=low_value.failure_modes,
                             verifiers=low_value.verifiers,
                             shared_blind_spots=(),
                             producer_evidence=kwargs.get("producer_evidence"),
+                            method="graft-value-aware",
+                            evidence_capabilities=low_value.evidence_capabilities,
                         ),
                     ),
                     patch("graft.controller.VerifierExecutor.run") as execute,
@@ -448,6 +475,16 @@ class HookReplayTests(unittest.TestCase):
                 self.assertEqual(result["decision"], "block")
                 captured = SessionStateStore(root).load("value-feedback")
                 self.assertIsNotNone(captured.pending_promotion)
+                self.assertEqual(
+                    captured.pending_promotion.reproduction_commands,
+                    (
+                        (
+                            sys.executable,
+                            "-c",
+                            "raise SystemExit(1)",
+                        ),
+                    ),
+                )
                 self.assertEqual(captured.verification_round, 1)
                 self.assertGreater(captured.spent_budget, 0)
 

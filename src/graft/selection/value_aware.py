@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from graft.registry import SelectionPolicy
-from graft.schema import FeedbackGraph, Selection, VerifierSpec
+from graft.schema import (
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapabilityDisposition,
+    FeedbackGraph,
+    Selection,
+    VerifierSpec,
+)
 
 from .objective import InvalidFeedbackGraph, expected_detection_utility, set_cost
 
@@ -25,6 +31,15 @@ class ValueAwareSelector:
         if policy.strategy != "value-aware":
             raise ValueError("ValueAwareSelector requires a value-aware policy")
         candidates = tuple(sorted(graph.verifiers, key=lambda item: item.verifier_id))
+        if isinstance(graph, EvidenceAwareFeedbackGraph):
+            eligible_ids = {
+                item.verifier_id
+                for item in graph.evidence_capability_assessments
+                if item.disposition == EvidenceCapabilityDisposition.ELIGIBLE
+            }
+            candidates = tuple(
+                item for item in candidates if item.verifier_id in eligible_ids
+            )
         selected: tuple[VerifierSpec, ...] = ()
         remaining = list(candidates)
         evaluated = 0

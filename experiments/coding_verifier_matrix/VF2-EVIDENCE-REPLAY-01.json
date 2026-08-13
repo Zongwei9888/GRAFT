@@ -1,0 +1,35 @@
+{
+  "status": "post_hoc_mechanism_replay",
+  "checkpoint_key": "6700f6aff33c0484a8729f77eadde30ad034516996fc852fdddc5845c1581a29",
+  "candidate_tree_hash": "0535e3f160f04b5095f958806b74f328c1e6f17605bc444f6c161c45d99e56cc",
+  "frozen_plan_sha256": "5d19de7d992592e826ecc7de1c083fcc59cca44ad5083a0b4745396a89dbfc57",
+  "complete_branch_files": 4,
+  "blocking_finding_evidence_items": 2,
+  "portable_bundle_count": 0,
+  "preflight_eligible_count": 0,
+  "counterfactual_boundary": "The old frozen plan predates EvidenceCapability declarations. Preflight status is evaluated only under the explicit post-hoc declaration that the dependency visible in each frozen command has origin verifier_workspace.",
+  "rows": [
+    {
+      "verifier_id": "agentic-evidence-02",
+      "failure_modes": ["F11"],
+      "old_result_reproducible": false,
+      "canonical_replay_argv": null,
+      "bundle_possible": false,
+      "counterfactual_preflight": "unavailable",
+      "preflight_reasons": [
+        "observed-temporary-dependency: non-portable dependency origins: verifier_workspace"
+      ]
+    },
+    {
+      "verifier_id": "adversarial-test-01",
+      "failure_modes": ["F02"],
+      "old_result_reproducible": false,
+      "canonical_replay_argv": null,
+      "bundle_possible": false,
+      "counterfactual_preflight": "unavailable",
+      "preflight_reasons": [
+        "observed-temporary-dependency: non-portable dependency origins: verifier_workspace"
+      ]
+    }
+  ]
+}

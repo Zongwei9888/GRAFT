@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shlex
 import shutil
@@ -7,6 +8,7 @@ import subprocess
 import tempfile
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Iterator, Mapping
@@ -14,16 +16,27 @@ from typing import Any, Iterator, Mapping
 from graft.codex.cli_runner import CliCodexRunner, CodexExecutionError
 from graft.costing import stage_cost_from_turn
 from graft.evidence.baseline_archive import baseline_diff_excerpt
+from graft.evidence.capability import eligible_routes
+from graft.evidence.reproduction import (
+    canonical_reproduction_argv,
+    portable_reproduction_argv,
+    simple_shell_argv,
+)
 from graft.evidence.snapshot import freeze_source
 from graft.schema import (
+    EvidenceAwareFeedbackGraph,
+    EvidenceAwareEvidenceItem,
+    EvidenceAwareVerifierResult,
     EvidenceItem,
     FeedbackGraph,
     PromotionOutcome,
+    ReproductionBundle,
     RunConfig,
     SourceSnapshot,
     Verdict,
     VerifierResult,
     VerifierSpec,
+    to_jsonable,
 )
 
 
@@ -58,6 +71,7 @@ class VerifierExecutor:
                 spec,
                 snapshot,
                 requirements=requirements,
+                graph=graph,
                 config_path=config_path,
                 environment_fingerprint=environment_fingerprint,
             )
@@ -78,6 +92,7 @@ class VerifierExecutor:
         snapshot: SourceSnapshot,
         *,
         requirements: tuple[str, ...],
+        graph: FeedbackGraph,
         config_path: Path,
         environment_fingerprint: str,
     ) -> VerifierResult:
@@ -140,12 +155,63 @@ class VerifierExecutor:
             else:
                 verdict = Verdict.ERROR
                 summary = f"Unexpected exit code {completed.returncode}."
-            evidence = (
-                EvidenceItem(kind="command", observation=summary, command=command),
-            ) if verdict == Verdict.FAIL else ()
+            evidence_aware = isinstance(graph, EvidenceAwareFeedbackGraph)
+            reproduction_bundles: tuple[ReproductionBundle, ...] = ()
+            if evidence_aware:
+                routes = eligible_routes(
+                    graph,
+                    spec.verifier_id,
+                    transport="standalone_command",
+                )
+                canonical = canonical_reproduction_argv(
+                    command,
+                    frozen_files=frozenset(snapshot.file_hashes),
+                    run_root=run_root,
+                )
+                if routes and canonical is not None and verdict in {Verdict.PASS, Verdict.FAIL}:
+                    route = routes[0]
+                    expected = "command exits with status 0"
+                    actual = f"command exited with status {completed.returncode}: {summary}"
+                    evidence = (
+                        EvidenceAwareEvidenceItem(
+                            kind="command",
+                            observation=summary,
+                            command=command,
+                            failure_modes=spec.failure_modes,
+                            oracle_origin=route.oracle_origin,
+                            expected=expected,
+                            actual=actual,
+                        ),
+                    )
+                    reproduction_bundles = (
+                        _make_reproduction_bundle(
+                            snapshot=snapshot,
+                            spec=spec,
+                            route_id=route.route_id,
+                            dependency_origins=route.dependency_origins,
+                            oracle_origin=route.oracle_origin,
+                            evidence_kind="command",
+                            transport="standalone_command",
+                            observation=summary,
+                            expected=expected,
+                            actual=actual,
+                            command=canonical,
+                            artifact_path=None,
+                            requirement_refs=(),
+                            failure_modes=spec.failure_modes,
+                        ),
+                    )
+                else:
+                    evidence = ()
+            else:
+                evidence = (
+                    EvidenceItem(kind="command", observation=summary, command=command),
+                ) if verdict == Verdict.FAIL else ()
             promotion_outcome = None
             if spec.revalidates_feedback:
-                if verdict == Verdict.PASS:
+                if verdict == Verdict.PASS and (
+                    not evidence_aware or reproduction_bundles
+                ):
                     promotion_outcome = PromotionOutcome.FIXED_AND_PRESERVED
                 elif verdict == Verdict.FAIL:
                     promotion_outcome = PromotionOutcome.NOT_FIXED
@@ -164,13 +230,25 @@ class VerifierExecutor:
         )
         if mutation:
             return self._error_result(spec, snapshot, duration, mutation)
-        return VerifierResult(
+        result_type = (
+            EvidenceAwareVerifierResult
+            if isinstance(graph, EvidenceAwareFeedbackGraph)
+            else VerifierResult
+        )
+        result_kwargs = dict(
             verifier_id=spec.verifier_id,
             verdict=verdict,
             summary=summary,
             source_hash=snapshot.checkpoint_key,
             blocking=spec.blocking,
-            reproducible=verdict == Verdict.FAIL,
+            reproducible=(
+                verdict == Verdict.FAIL
+                and (
+                    bool(reproduction_bundles)
+                    if isinstance(graph, EvidenceAwareFeedbackGraph)
+                    else True
+                )
+            ),
             duration_s=duration,
             failure_modes=spec.failure_modes if verdict == Verdict.FAIL else (),
             evidence=evidence,
@@ -181,9 +259,16 @@ class VerifierExecutor:
             confidence=1.0 if verdict in {Verdict.PASS, Verdict.FAIL} else 0.0,
             lineage=spec.lineage,
             usage={},
-            executed_evidence=True,
+            executed_evidence=(
+                bool(reproduction_bundles)
+                if isinstance(graph, EvidenceAwareFeedbackGraph)
+                else True
+            ),
             promotion_outcome=promotion_outcome,
         )
+        if result_type is EvidenceAwareVerifierResult:
+            result_kwargs["reproduction_bundles"] = reproduction_bundles
+        return result_type(**result_kwargs)
 
     def _run_codex_verifier(
         self,
@@ -205,7 +290,16 @@ class VerifierExecutor:
             disposable_environment=self.disposable_environment,
         )
         verdict_schema = Path(
-            str(files("graft").joinpath("resources", "verifier_verdict.schema.json"))
+            str(
+                files("graft").joinpath(
+                    "resources",
+                    (
+                        "verifier_verdict_vnext.schema.json"
+                        if isinstance(graph, EvidenceAwareFeedbackGraph)
+                        else "verifier_verdict.schema.json"
+                    ),
+                )
+            )
         )
         started = time.monotonic()
         with _execution_workspace(Path(snapshot.root), spec.isolation) as run_root:
@@ -267,8 +361,12 @@ class VerifierExecutor:
                 if verdict == Verdict.PASS and spec.revalidates_feedback
                 else set(valid_modes)
             )
-            evidence = _parse_evidence(raw.get("evidence", []), evidence_modes)
-            reproduced_modes = _blocking_reproduced_modes(
+            evidence = _parse_evidence(
+                raw.get("evidence", []),
+                evidence_modes,
+                evidence_aware=isinstance(graph, EvidenceAwareFeedbackGraph),
+            )
+            validated_evidence = _validated_reproduction_evidence(
                 evidence,
                 turn.events,
                 run_root,
@@ -277,6 +375,58 @@ class VerifierExecutor:
                 spec,
                 disposable_environment=self.disposable_environment,
             )
+            reproduction_bundles: tuple[ReproductionBundle, ...] = ()
+            if isinstance(graph, EvidenceAwareFeedbackGraph):
+                bundles: list[ReproductionBundle] = []
+                for validated in validated_evidence:
+                    item = validated.item
+                    expected = getattr(item, "expected", None)
+                    actual = getattr(item, "actual", None)
+                    if expected is None or actual is None:
+                        continue
+                    routes = eligible_routes(
+                        graph,
+                        spec.verifier_id,
+                        oracle_origin=item.oracle_origin,
+                        transport=validated.transport,
+                    )
+                    if not routes:
+                        continue
+                    route = routes[0]
+                    bundles.append(
+                        _make_reproduction_bundle(
+                            snapshot=snapshot,
+                            spec=spec,
+                            route_id=route.route_id,
+                            dependency_origins=route.dependency_origins,
+                            oracle_origin=item.oracle_origin,
+                            evidence_kind=item.kind,
+                            transport=validated.transport,
+                            observation=item.observation,
+                            expected=expected,
+                            actual=actual,
+                            command=validated.command,
+                            artifact_path=validated.artifact_path,
+                            requirement_refs=item.requirement_refs,
+                            failure_modes=item.failure_modes,
+                        )
+                    )
+                reproduction_bundles = tuple(bundles)
+                reproduced_modes = tuple(
+                    dict.fromkeys(
+                        failure_mode
+                        for bundle in reproduction_bundles
+                        for failure_mode in bundle.failure_modes
+                    )
+                )
+            else:
+                reproduced_modes = tuple(
+                    dict.fromkeys(
+                        failure_mode
+                        for validated in validated_evidence
+                        for failure_mode in validated.item.failure_modes
+                    )
+                )
             claimed_reproducible = bool(raw.get("reproducible", False))
             reproducible = (
                 verdict == Verdict.FAIL
@@ -321,7 +471,12 @@ class VerifierExecutor:
         if mutation:
             return self._error_result(spec, snapshot, turn.duration_s, mutation)
         stage_cost = stage_cost_from_turn(spec.verifier_id, "verifier", turn)
-        return VerifierResult(
+        result_type = (
+            EvidenceAwareVerifierResult
+            if isinstance(graph, EvidenceAwareFeedbackGraph)
+            else VerifierResult
+        )
+        result_kwargs = dict(
             verifier_id=spec.verifier_id,
             verdict=verdict,
             summary=summary,
@@ -341,6 +496,9 @@ class VerifierExecutor:
             executed_evidence=bool(reproduced_modes),
             promotion_outcome=promotion_outcome,
         )
+        if result_type is EvidenceAwareVerifierResult:
+            result_kwargs["reproduction_bundles"] = reproduction_bundles
+        return result_type(**result_kwargs)
 
     @staticmethod
     def _error_result(
@@ -412,6 +570,40 @@ Use fixed_and_preserved only with executed evidence for both the repaired findin
 preserved behavior. Use regressed when the repair fixes or changes the target but violates a named
 raw or unchanged-baseline behavior.
 """
+    evidence_protocol = ""
+    if isinstance(graph, EvidenceAwareFeedbackGraph):
+        capability = next(
+            (
+                item
+                for item in graph.evidence_capabilities
+                if item.verifier_id == spec.verifier_id
+            ),
+            None,
+        )
+        assessment = next(
+            (
+                item
+                for item in graph.evidence_capability_assessments
+                if item.verifier_id == spec.verifier_id
+            ),
+            None,
+        )
+        evidence_protocol = f"""
+
+Evidence-capability contract declared before selection:
+{json.dumps(to_jsonable(capability), ensure_ascii=False, indent=2)}
+
+Deterministic preflight assessment:
+{json.dumps(to_jsonable(assessment), ensure_ascii=False, indent=2)}
+
+Your final executable evidence must use one preflight-eligible route exactly. Exploration may use
+other tools, but a blocking result must end with a standalone command whose dependencies already
+belong to the declared task environment, frozen candidate, or unchanged baseline. Do not install a
+new dependency or rely on a verifier-created file for the final reproduction. For every evidence
+item, fill expected and actual with the concrete compared outcomes; use null only for advisory or
+unavailable observations. GRAFT will independently match the command event, canonicalize it for
+the producer checkpoint, and reject any result that does not match this capability contract.
+"""
     if disposable_environment:
         mode = (
             "This entire task environment is an expendable verifier branch restored from the "
@@ -451,7 +643,7 @@ Files added or modified after the task baseline:
 Immutable baseline-to-candidate diff (implementation evidence only; not a contract oracle):
 {baseline_diff}
 {mode}
-{promotion_instructions}
+{promotion_instructions}{evidence_protocol}
 
 Inspect the actual repository and use tools when they can establish observable evidence. Do not
 trust the producer's summary. The raw requirements are authoritative. Baseline repository evidence
@@ -542,7 +734,10 @@ def _producer_workspace_mutation(
 
 
 def _parse_evidence(
-    raw_items: Any, valid_modes: set[str] | None = None
+    raw_items: Any,
+    valid_modes: set[str] | None = None,
+    *,
+    evidence_aware: bool = False,
 ) -> tuple[EvidenceItem, ...]:
     if not isinstance(raw_items, list):
         return ()
@@ -550,8 +745,8 @@ def _parse_evidence(
     for item in raw_items:
         if not isinstance(item, Mapping):
             continue
-        result.append(
-            EvidenceItem(
+        item_type = EvidenceAwareEvidenceItem if evidence_aware else EvidenceItem
+        item_kwargs = dict(
                 kind=str(item.get("kind", "observation")),
                 observation=str(item.get("observation", "")),
                 path=str(item["path"]) if item.get("path") else None,
@@ -566,9 +761,28 @@ def _parse_evidence(
                     str(value) for value in item.get("requirement_refs", [])
                 ),
                 oracle_origin=str(item.get("oracle_origin", "unspecified")),
-            )
         )
+        if evidence_aware:
+            item_kwargs["expected"] = (
+                str(item["expected"])
+                if item.get("expected") is not None
+                else None
+            )
+            item_kwargs["actual"] = (
+                str(item["actual"])
+                if item.get("actual") is not None
+                else None
+            )
+        result.append(item_type(**item_kwargs))
     return tuple(result)
+
+
+@dataclass(frozen=True)
+class _ValidatedEvidence:
+    item: EvidenceItem
+    transport: str
+    command: tuple[str, ...] = ()
+    artifact_path: str | None = None
 
 
 def _blocking_reproduced_modes(
@@ -581,8 +795,36 @@ def _blocking_reproduced_modes(
     *,
     disposable_environment: bool = False,
 ) -> tuple[str, ...]:
+    validated = _validated_reproduction_evidence(
+        evidence,
+        events,
+        run_root,
+        snapshot,
+        requirements,
+        spec,
+        disposable_environment=disposable_environment,
+    )
+    return tuple(
+        dict.fromkeys(
+            failure_mode
+            for record in validated
+            for failure_mode in record.item.failure_modes
+        )
+    )
+
+
+def _validated_reproduction_evidence(
+    evidence: tuple[EvidenceItem, ...],
+    events: tuple[Mapping[str, Any], ...],
+    run_root: Path,
+    snapshot: SourceSnapshot,
+    requirements: tuple[str, ...],
+    spec: VerifierSpec,
+    *,
+    disposable_environment: bool = False,
+) -> tuple[_ValidatedEvidence, ...]:
     observed = _observed_commands(events)
-    reproduced: list[str] = []
+    validated: list[_ValidatedEvidence] = []
     for item in evidence:
         if item.oracle_origin not in {
             "authoritative_runtime",
@@ -594,13 +836,19 @@ def _blocking_reproduced_modes(
         if item.command:
             wanted = _command_fingerprints(item.command)
             observed_command = bool(wanted & observed)
-        observed_artifact = _observed_artifact(item, run_root)
-        if not observed_command and not observed_artifact:
+        artifact_path = _observed_artifact_path(item, run_root)
+        if not observed_command and artifact_path is None:
             continue
-        if observed_command and not _portable_reproduction_command(
-            item.command, run_root, snapshot
-        ):
-            continue
+        canonical_command: tuple[str, ...] = ()
+        if observed_command:
+            canonical = canonical_reproduction_argv(
+                item.command,
+                frozen_files=frozenset(snapshot.file_hashes),
+                run_root=run_root,
+            )
+            if canonical is None:
+                continue
+            canonical_command = canonical
         if (
             item.oracle_origin == "baseline_repository"
             and not _is_baseline_evidence(item, run_root, snapshot)
@@ -620,21 +868,39 @@ def _blocking_reproduced_modes(
                 or not set(item.requirement_refs).issubset(valid_refs)
             ):
                 continue
-        reproduced.extend(item.failure_modes)
-    return tuple(dict.fromkeys(reproduced))
+        validated.append(
+            _ValidatedEvidence(
+                item=item,
+                transport=(
+                    "standalone_command" if observed_command else "runtime_artifact"
+                ),
+                command=canonical_command,
+                artifact_path=artifact_path,
+            )
+        )
+    return tuple(validated)
 
 
 def _observed_artifact(item: EvidenceItem, run_root: Path) -> bool:
+    return _observed_artifact_path(item, run_root) is not None
+
+
+def _observed_artifact_path(item: EvidenceItem, run_root: Path) -> str | None:
     if item.kind not in {"runtime", "state", "screenshot", "trace"} or not item.path:
-        return False
+        return None
     candidate = Path(item.path)
     if not candidate.is_absolute():
         candidate = run_root / candidate
     try:
         resolved = candidate.resolve()
     except OSError:
-        return False
-    return (resolved == run_root or run_root in resolved.parents) and resolved.exists()
+        return None
+    if not ((resolved == run_root or run_root in resolved.parents) and resolved.exists()):
+        return None
+    try:
+        return resolved.relative_to(run_root.resolve()).as_posix()
+    except ValueError:
+        return None
 
 
 def _is_baseline_evidence(
@@ -691,115 +957,6 @@ def _portable_reproduction_command(
         frozen_files=frozenset(snapshot.file_hashes),
         run_root=run_root,
     )
-
-
-def portable_reproduction_argv(
-    command: tuple[str, ...],
-    *,
-    frozen_files: frozenset[str],
-    run_root: Path | None = None,
-) -> bool:
-    """Check whether a reported command survives beyond a verifier copy."""
-
-    if not command:
-        return False
-    if len(command) == 1 and any(character.isspace() for character in command[0]):
-        try:
-            parsed = tuple(shlex.split(command[0]))
-        except ValueError:
-            return False
-        return portable_reproduction_argv(
-            parsed,
-            frozen_files=frozen_files,
-            run_root=run_root,
-        )
-    root = run_root.resolve() if run_root is not None else None
-    executable = Path(command[0]).name
-    if executable in {"bash", "sh", "zsh"}:
-        for flag in ("-c", "-lc"):
-            if flag not in command:
-                continue
-            index = command.index(flag)
-            # Only unwrap the conventional ``shell -c payload`` transport. Extra
-            # setup arguments or post-payload values make replay semantics unclear.
-            if index != 1 or index + 2 != len(command):
-                return False
-            inner = _simple_shell_argv(command[index + 1])
-            if inner is None or Path(inner[0]).name in {"bash", "sh", "zsh"}:
-                return False
-            assignment_name, separator, _ = inner[0].partition("=")
-            if separator and assignment_name.isidentifier():
-                return False
-            return portable_reproduction_argv(
-                inner,
-                frozen_files=frozen_files,
-                run_root=run_root,
-            )
-        return False
-    inline_payload_indexes: set[int] = set()
-    inline_flags = {
-        "python": {"-c"},
-        "python3": {"-c"},
-        "pypy": {"-c"},
-        "pypy3": {"-c"},
-        "node": {"-e", "--eval", "-p", "--print"},
-        "ruby": {"-e"},
-        "perl": {"-e", "-E"},
-    }.get(executable, set())
-    for index, part in enumerate(command[:-1]):
-        if part in inline_flags:
-            inline_payload_indexes.add(index + 1)
-    for index, raw in enumerate(command[1:], start=1):
-        if index in inline_payload_indexes:
-            continue
-        token = str(raw).strip()
-        if not token or token.startswith("-") or "\n" in token:
-            continue
-        # Test runners commonly append a node selector to a real path.
-        path_text = token.split("::", 1)[0]
-        raw_path = Path(path_text)
-        was_absolute = raw_path.is_absolute()
-        candidate = raw_path if was_absolute or root is None else root / raw_path
-        try:
-            resolved = candidate.resolve()
-        except OSError:
-            resolved = candidate
-        looks_like_file = (
-            (root is not None and resolved.is_file())
-            or was_absolute
-            or "/" in path_text
-            or "\\" in path_text
-            or Path(path_text).suffix
-            in {
-                ".py",
-                ".js",
-                ".mjs",
-                ".cjs",
-                ".rb",
-                ".sh",
-                ".zsh",
-                ".bash",
-                ".pl",
-                ".php",
-                ".lua",
-                ".r",
-                ".R",
-            }
-        )
-        if not looks_like_file:
-            continue
-        if root is None:
-            if was_absolute:
-                return False
-            relative = raw_path.as_posix()
-        else:
-            try:
-                relative = resolved.relative_to(root).as_posix()
-            except ValueError:
-                return False
-        if relative not in frozen_files:
-            return False
-    return True
 
 
 def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> frozenset[str]:
@@ -864,7 +1021,7 @@ def _command_fingerprints(
                     # unwrapped because observing one branch or pipeline is not proof
                     # that a separately reported inner command executed as claimed.
                     if _unwrap_depth < 2:
-                        inner = _simple_shell_argv(parts[index + 1])
+                        inner = simple_shell_argv(parts[index + 1])
                         if inner is not None:
                             fingerprints.update(
                                 _command_fingerprints(
@@ -875,30 +1032,70 @@ def _command_fingerprints(
     return frozenset(fingerprints)
 
 
-def _simple_shell_argv(payload: str) -> tuple[str, ...] | None:
-    try:
-        lexer = shlex.shlex(
-            payload,
-            posix=True,
-            punctuation_chars="();<>|&",
-        )
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        parts = tuple(lexer)
-    except ValueError:
-        return None
-    if not parts:
-        return None
-    shell_control = frozenset("();<>|&")
-    if any(token and set(token) <= shell_control for token in parts):
-        return None
-    if any("`" in token or "$(" in token for token in parts):
-        return None
-    return parts
-
-
 def _normalize_command(command: tuple[str, ...]) -> str:
     return " ".join(shlex.quote(part) for part in command).strip()
+
+
+def _make_reproduction_bundle(
+    *,
+    snapshot: SourceSnapshot,
+    spec: VerifierSpec,
+    route_id: str,
+    dependency_origins: tuple[str, ...],
+    oracle_origin: str,
+    evidence_kind: str,
+    transport: str,
+    observation: str,
+    expected: str | None,
+    actual: str | None,
+    command: tuple[str, ...],
+    artifact_path: str | None,
+    requirement_refs: tuple[str, ...],
+    failure_modes: tuple[str, ...],
+) -> ReproductionBundle:
+    payload = {
+        "checkpoint_key": snapshot.checkpoint_key,
+        "verifier_id": spec.verifier_id,
+        "failure_modes": list(failure_modes),
+        "oracle_origin": oracle_origin,
+        "evidence_kind": evidence_kind,
+        "transport": transport,
+        "observation": observation,
+        "expected": expected,
+        "actual": actual,
+        "command": list(command),
+        "artifact_path": artifact_path,
+        "requirement_refs": list(requirement_refs),
+        "route_id": route_id,
+        "dependency_origins": list(dependency_origins),
+        "lineage": to_jsonable(spec.lineage),
+    }
+    bundle_id = hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return ReproductionBundle(
+        bundle_id=bundle_id,
+        checkpoint_key=snapshot.checkpoint_key,
+        verifier_id=spec.verifier_id,
+        failure_modes=failure_modes,
+        oracle_origin=oracle_origin,
+        evidence_kind=evidence_kind,
+        transport=transport,
+        observation=observation,
+        expected=expected,
+        actual=actual,
+        command=command,
+        artifact_path=artifact_path,
+        requirement_refs=requirement_refs,
+        route_id=route_id,
+        dependency_origins=dependency_origins,
+        lineage=spec.lineage,
+    )
 
 
 def _trim(value: str, limit: int = 64_000) -> str:

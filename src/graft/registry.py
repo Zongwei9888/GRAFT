@@ -488,7 +488,7 @@ def default_value_aware_config_payload(*, enabled: bool = True) -> dict[str, Any
 
     payload = deepcopy(default_original_config_payload(enabled=enabled))
     payload["method"] = VALUE_AWARE_METHOD_ID
-    payload["environment_fingerprint"] = "graft-value-aware-v1"
+    payload["environment_fingerprint"] = "graft-value-aware-vnext-evidence-v1"
     payload["modeling"]["completion_gate"] = {
         "model": None,
         "timeout_s": 45,

@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
 from graft.registry import GraftConfig
 from graft.schema import (
     Behavior,
+    EvidenceAwareFeedbackGraph,
+    EvidenceCapability,
+    EvidenceCapabilityAssessment,
+    EvidenceCapabilityDisposition,
+    EvidenceRouteAvailability,
     FailureMode,
     FeedbackGraph,
     Lineage,
+    PlannedEvidenceRoute,
     ProducerEvidenceSummary,
     PromotionRequirement,
     SharedBlindSpot,
@@ -103,7 +110,12 @@ def _feedback_graph(raw: Mapping[str, Any]) -> FeedbackGraph:
         )
         for item in _objects(raw.get("shared_blind_spots"), "shared_blind_spots")
     )
-    return FeedbackGraph(
+    graph_type = (
+        EvidenceAwareFeedbackGraph
+        if "evidence_capabilities" in raw
+        else FeedbackGraph
+    )
+    graph = graph_type(
         source_hash=str(raw["source_hash"]),
         behaviors=behaviors,
         failure_modes=failure_modes,
@@ -117,6 +129,56 @@ def _feedback_graph(raw: Mapping[str, Any]) -> FeedbackGraph:
         ),
         promotion=_promotion(raw.get("promotion")),
         method=str(raw.get("method", "graft-original")),
+    )
+    if isinstance(graph, EvidenceAwareFeedbackGraph):
+        return replace(
+            graph,
+            evidence_capabilities=tuple(
+                _evidence_capability(item)
+                for item in _objects(
+                    raw.get("evidence_capabilities", []),
+                    "evidence_capabilities",
+                )
+            ),
+            evidence_capability_assessments=tuple(
+                _evidence_capability_assessment(item)
+                for item in _objects(
+                    raw.get("evidence_capability_assessments", []),
+                    "evidence_capability_assessments",
+                )
+            ),
+        )
+    return graph
+
+
+def _evidence_capability(raw: Mapping[str, Any]) -> EvidenceCapability:
+    return EvidenceCapability(
+        verifier_id=str(raw["verifier_id"]),
+        routes=tuple(
+            PlannedEvidenceRoute(
+                route_id=str(route["route_id"]),
+                availability=EvidenceRouteAvailability(str(route["availability"])),
+                oracle_origin=str(route["oracle_origin"]),
+                transport=str(route["transport"]),
+                dependency_origins=tuple_of_strings(
+                    route.get("dependency_origins")
+                ),
+                reason=str(route.get("reason", "")),
+            )
+            for route in _objects(raw.get("routes", []), "evidence routes")
+        ),
+        limitations=tuple_of_strings(raw.get("limitations")),
+    )
+
+
+def _evidence_capability_assessment(
+    raw: Mapping[str, Any],
+) -> EvidenceCapabilityAssessment:
+    return EvidenceCapabilityAssessment(
+        verifier_id=str(raw["verifier_id"]),
+        disposition=EvidenceCapabilityDisposition(str(raw["disposition"])),
+        eligible_route_ids=tuple_of_strings(raw.get("eligible_route_ids")),
+        reasons=tuple_of_strings(raw.get("reasons")),
     )
 
 

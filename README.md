@@ -14,9 +14,11 @@ recorded in [`docs/graft-core-definition-zh.md`](docs/graft-core-definition-zh.m
 gate-driven correction plan is in
 [`docs/graft-optimization-plan-zh.md`](docs/graft-optimization-plan-zh.md).
 
-## Unreleased value-aware policy
+## Unreleased value-aware research path
 
-The correction plan is now implemented behind an explicit project policy:
+The repository contains the full-graph value-aware-v1 baseline plus the first safety prerequisite
+for vNext. It does **not** yet contain the progressive VOC policy described in the optimization
+plan. Both remain behind an explicit project policy:
 
 ```bash
 graft init --selection-policy value-aware
@@ -31,9 +33,10 @@ changed Stop
         → non-completion: No-Op
         → delivery candidate:
             LLM task/failure model + LLM verifier planning
+            → preflight declared portable evidence routes
             → compare conservative marginal net value with No-Op = 0
                 → No-Op, or execute selected evidence
-                    → reproducible finding: same Codex session repairs
+                    → validated ReproductionBundle: same Codex session repairs
                     → repaired checkpoint: executed promotion revalidation
 ```
 
@@ -46,8 +49,12 @@ explicitly unknown. Selection reports can be replayed without executing verifier
 graft replay-selection --report REPORT.json --config VALUE_AWARE_CONFIG.json
 ```
 
-These are implemented research mechanisms, not evidence that the policy improves Codex. The M1–M3
-evaluation gates in the optimization plan have not yet passed.
+The preflight rejects candidates that admit only source opinions, temporary verifier files or
+installs, compound shell programs, or uncaptured runtime artifacts. Execution remains independently
+checked: a blocking result must match an observed command, the predeclared authority/dependency
+route, the frozen checkpoint, and concrete expected/actual outcomes. These are implemented safety
+mechanisms, not evidence that the policy improves Codex. The progressive VOC algorithm and its
+effectiveness gates remain unfinished.
 
 ## What changed in 0.5
 
@@ -157,8 +164,11 @@ Those eight steps describe the frozen Original baseline. With `value-aware`, the
 runs first, producer evidence is supplied to both LLM modeling stages, and the selector discounts
 overlapping evidence, uncertainty, predicted repair regression, wall time, and model cost. No-Op
 has utility zero and wins whenever every conservative marginal value is non-positive or exceeds a
-remaining task-epoch resource budget. After feedback, a fresh executable verifier must classify the
-candidate as `fixed_and_preserved`; `not_fixed`, `regressed`, and `unresolved` cannot be promoted.
+remaining task-epoch resource budget. Before selection, an `EvidenceCapabilityPreflight` removes
+blocking candidates with no declared portable evidence route. After execution, only a mechanically
+validated, checkpoint-bound `ReproductionBundle` can carry feedback or promotion commands. A fresh
+executable verifier must classify a repaired candidate as `fixed_and_preserved`; `not_fixed`,
+`regressed`, and `unresolved` cannot be promoted.
 
 Reports and bounded immutable task-start text archives are source-bound and stored outside arbitrary target
 repositories in the platform's GRAFT state directory. The original producer workspace is checked

@@ -11,7 +11,9 @@ RESPONSE_SCHEMAS = (
     "completion_decision.schema.json",
     "task_analysis.schema.json",
     "verifier_plan.schema.json",
+    "verifier_plan_vnext.schema.json",
     "verifier_verdict.schema.json",
+    "verifier_verdict_vnext.schema.json",
 )
 
 

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GRAFT evidence-aware verifier verdict",
+  "type": "object",
+  "properties": {
+    "verdict": {"type": "string", "enum": ["pass", "fail", "abstain", "error"]},
+    "failure_modes": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "string"},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": ["string", "null"]},
+          "line": {"type": ["integer", "null"], "minimum": 1},
+          "command": {"type": "array", "items": {"type": "string"}},
+          "observation": {"type": "string"},
+          "expected": {"type": ["string", "null"]},
+          "actual": {"type": ["string", "null"]},
+          "failure_modes": {"type": "array", "items": {"type": "string"}},
+          "requirement_refs": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^R[1-9][0-9]*$"}
+          },
+          "oracle_origin": {
+            "type": "string",
+            "enum": [
+              "authoritative_runtime",
+              "baseline_repository",
+              "requirement_derived_runtime",
+              "candidate_repository",
+              "verifier_generated",
+              "source_inspection",
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "path",
+          "line",
+          "command",
+          "observation",
+          "expected",
+          "actual",
+          "failure_modes",
+          "requirement_refs",
+          "oracle_origin"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "reproducible": {"type": "boolean"},
+    "promotion_outcome": {
+      "type": ["string", "null"],
+      "enum": ["fixed_and_preserved", "not_fixed", "regressed", "unresolved", null]
+    }
+  },
+  "required": ["verdict", "failure_modes", "summary", "evidence", "confidence", "reproducible", "promotion_outcome"],
+  "additionalProperties": false
+}
