@@ -207,6 +207,17 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             ["pandas-dev__pandas.82fa2715.test_iceberg.85771c70.lv2"],
         )
 
+    def test_continuation_session_upload_has_no_frozen_calendar_path(self) -> None:
+        source = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "matrix_continuation_agent.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("session_relative = self.local_session.relative_to", source)
+        self.assertNotIn("sessions/2026/08/13", source)
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -171,11 +171,21 @@ class MatrixContinuationCodex(VerifierMatrixCodex):
         }
 
     async def _upload_inputs(self, environment: BaseEnvironment) -> dict[str, str]:
+        session_root = self.source_trial / "agent" / "sessions"
+        try:
+            session_relative = self.local_session.relative_to(session_root)
+        except ValueError as exc:
+            raise ValueError("Saved Codex session is outside the source session root") from exc
+        remote_session = (
+            Path(EnvironmentPaths.agent_dir.as_posix())
+            / "sessions"
+            / session_relative
+        ).as_posix()
         await self.exec_as_root(
             environment,
             command=(
                 f"mkdir -p {shlex.quote(self.INPUT_ROOT)} "
-                f"{shlex.quote(EnvironmentPaths.agent_dir.as_posix() + '/sessions/2026/08/13')}"
+                f"{shlex.quote(str(Path(remote_session).parent))}"
             ),
         )
         paths = {
@@ -196,9 +206,7 @@ class MatrixContinuationCodex(VerifierMatrixCodex):
             ),
             "session": (
                 self.local_session,
-                EnvironmentPaths.agent_dir.as_posix()
-                + "/sessions/2026/08/13/"
-                + self.local_session.name,
+                remote_session,
             ),
         }
         for local, remote in paths.values():
