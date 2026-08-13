@@ -1,0 +1,31 @@
+{
+  "job_name": "featurebench-pandas-iceberg-continuation-v1",
+  "jobs_dir": "experiments/coding_verifier_matrix/jobs",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "experiments.coding_verifier_matrix.matrix_continuation_agent:MatrixContinuationCodex",
+      "model_name": "gpt-5.6-sol",
+      "kwargs": {
+        "version": "0.147.0",
+        "reasoning_effort": "high",
+        "graft_commit": "bebd552613c02c92f370e4a6b8ac71eef89059bd",
+        "source_job_dir": "experiments/coding_verifier_matrix/jobs/featurebench-pandas-iceberg-prospective-v1",
+        "matrix_sha256": "52867961605f4cad17b08ae73608b21803643c47f40ee98992fb7b392abf735c",
+        "candidate_archive_sha256": "91d819befc7a9f0afb9aee9ce140c0fd4fa8a454b8f9369600ff9fb67d47f8b9",
+        "session_sha256": "8b158584a71a0fee91efcac213119a50a077bb973b06fc9f2aabbd79fd93b3b2",
+        "expected_thread_id": "019ff905-92c7-7800-af45-7b46be07848a"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "featurebench-lite",
+      "version": "1.0",
+      "task_names": [
+        "pandas-dev__pandas.82fa2715.test_iceberg.85771c70.lv2"
+      ]
+    }
+  ]
+}

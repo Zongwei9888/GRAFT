@@ -67,3 +67,30 @@ must be preserved or improve. A zero reward delta on a saturated native candidat
 only a mechanism result. One trial cannot establish graph value; that requires the
 later paired multi-task comparison against Native, Run-All, individual ROI, and
 pairwise-diversity policies.
+
+## Frozen continuation decision
+
+The shared-prefix run completed before this section was added. The Original policy at
+budget 4 selected `adversarial-interface-test` and
+`agentic-optional-provenance`; both had blocking, reproducible, event-matched evidence.
+Therefore step 7 is enabled without adding any unselected finding.
+
+- source matrix SHA-256:
+  `52867961605f4cad17b08ae73608b21803643c47f40ee98992fb7b392abf735c`
+- candidate archive SHA-256:
+  `91d819befc7a9f0afb9aee9ce140c0fd4fa8a454b8f9369600ff9fb67d47f8b9`
+- producer session SHA-256:
+  `8b158584a71a0fee91efcac213119a50a077bb973b06fc9f2aabbd79fd93b3b2`
+- producer thread:
+  `019ff905-92c7-7800-af45-7b46be07848a`
+- candidate tree:
+  `c2e065ff3c621a9a543a62555ca4d9838cacbe8f5f477222844ac190fb4d3c00`
+- feedback checkpoint:
+  `7ffa319bca17118f247913759d2c31b1623f923b5f16ac512e098d2641a1d6f5`
+- feedback SHA-256:
+  `6f5e0447eda847a621525e4aa17de2f2bc2ec0433164b88724a710ce2bfa11c1`
+- continuation runtime commit:
+  `bebd552613c02c92f370e4a6b8ac71eef89059bd`
+
+The shared-prefix official reward is `1.0`. That score was not included among the
+artifacts used to prepare feedback or promotion.

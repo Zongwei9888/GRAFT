@@ -218,6 +218,31 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         self.assertIn("session_relative = self.local_session.relative_to", source)
         self.assertNotIn("sessions/2026/08/13", source)
 
+    def test_featurebench_pandas_continuation_is_source_bound(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "featurebench-pandas-iceberg-continuation-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        kwargs = config["agents"][0]["kwargs"]
+
+        self.assertEqual(
+            config["job_name"], "featurebench-pandas-iceberg-continuation-v1"
+        )
+        self.assertEqual(
+            kwargs["graft_commit"],
+            "bebd552613c02c92f370e4a6b8ac71eef89059bd",
+        )
+        for key in ("matrix_sha256", "candidate_archive_sha256", "session_sha256"):
+            self.assertRegex(kwargs[key], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            kwargs["expected_thread_id"],
+            "019ff905-92c7-7800-af45-7b46be07848a",
+        )
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
