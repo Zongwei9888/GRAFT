@@ -554,6 +554,26 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         self.assertEqual(v3_agent["kwargs"], expected_kwargs)
         self.assertEqual(v3["datasets"], config["datasets"])
 
+        plan = json.loads(
+            path.with_name("tb3-vf2-graft-plan-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        plan_agent = plan["agents"][0]
+        self.assertEqual(
+            plan_agent["name"],
+            "experiments.coding_verifier_matrix.environment_branch_agents:"
+            "MatrixPlanCodex",
+        )
+        self.assertTrue(plan_agent["kwargs"]["use_host_auth_json"])
+        self.assertRegex(
+            plan_agent["kwargs"]["candidate_manifest_sha256"], r"^[0-9a-f]{64}$"
+        )
+        self.assertRegex(
+            plan_agent["kwargs"]["candidate_archive_sha256"], r"^[0-9a-f]{64}$"
+        )
+        self.assertEqual(plan["datasets"], config["datasets"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
