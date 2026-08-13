@@ -37,7 +37,8 @@ container and evaluator are healthy. Oracle output is not passed into any later 
 
 ## Procedure
 
-1. Before Codex runs, hash and archive the public task-start workspace outside `/app`.
+1. Before Codex runs, discover exactly one Git worktree from the container state, then hash and
+   archive it outside that worktree. Zero or multiple worktrees censor the infrastructure row.
 2. Run Native Codex once and freeze its final candidate. GRAFT is not installed as a producer hook
    and cannot continue or modify this candidate.
 3. If the source tree is unchanged, record `no_candidate_change` and spend no verifier-model budget.
@@ -62,3 +63,8 @@ One task is only a pipeline smoke. It cannot establish selector quality, high-or
 Codex repair improvement. Scaling requires at least 40 independent checkpoints, at least five
 observed verifier families per checkpoint, a task-group-held-out selection split, and a separate
 feedback/promotion experiment measuring `official_post_feedback - official_pre_feedback`.
+
+## Amendments
+
+- [Amendment 01](AMENDMENT-01.md) prospectively excludes runtimes whose declared hardware cannot
+  be satisfied locally and records the Wav2Vec2 smoke as an infrastructure cancellation.

@@ -15,6 +15,27 @@ from graft.registry import default_original_config_payload, load_config
 from graft.schema import Verdict, VerifierResult, to_jsonable
 
 
+def select_unique_workspace(candidates: Sequence[str]) -> Path:
+    """Return the single discovered Git worktree or fail the infrastructure row.
+
+    Workspace discovery is intentionally independent of benchmark task text and
+    verifier planning.  Silently choosing among multiple repositories could make
+    the producer and the shadow verifiers inspect different source trees.
+    """
+
+    roots = {
+        str(Path(candidate.strip()).resolve())
+        for candidate in candidates
+        if candidate.strip()
+    }
+    if len(roots) != 1:
+        rendered = ", ".join(sorted(roots)) if roots else "none"
+        raise RuntimeError(
+            "Expected exactly one task Git worktree; discovered " + rendered
+        )
+    return Path(next(iter(roots)))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Capture a coding baseline or run a shadow verifier matrix."

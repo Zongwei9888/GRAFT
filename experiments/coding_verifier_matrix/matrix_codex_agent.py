@@ -11,6 +11,9 @@ from harbor.models.trial.paths import EnvironmentPaths
 
 from experiments.terminal_bench.graft_codex_agent import NativeCodex
 from experiments.terminal_bench.graft_original_codex_agent import GraftOriginalCodex
+from experiments.coding_verifier_matrix.verifier_matrix import (
+    select_unique_workspace,
+)
 
 
 class VerifierMatrixCodex(GraftOriginalCodex):
@@ -22,6 +25,7 @@ class VerifierMatrixCodex(GraftOriginalCodex):
     MATRIX_REQUIREMENTS = "/logs/agent/verifier-matrix-requirements.json"
     MATRIX_CONFIG = "/logs/agent/verifier-matrix-config.json"
     MATRIX_OUTPUT = "/logs/agent/verifier-matrix.json"
+    MATRIX_WORKSPACE = "/logs/agent/verifier-matrix-workspace.txt"
 
     @staticmethod
     @override
@@ -35,9 +39,38 @@ class VerifierMatrixCodex(GraftOriginalCodex):
         environment: BaseEnvironment,
         context: AgentContext,
     ) -> None:
+        await self._resolve_workspace(environment)
         await self._write_requirements_and_capture_baseline(instruction, environment)
-        await NativeCodex.run(self, instruction, environment, context)
+        previous_workdir = environment.task_env_config.workdir
+        environment.task_env_config.workdir = self.WORKSPACE
+        try:
+            await NativeCodex.run(self, instruction, environment, context)
+        finally:
+            environment.task_env_config.workdir = previous_workdir
         await self._run_shadow_matrix(environment)
+
+    async def _resolve_workspace(self, environment: BaseEnvironment) -> None:
+        """Discover the benchmark worktree without task-name or dataset branches."""
+
+        result = await self.exec_as_agent(
+            environment,
+            command=(
+                "{ git rev-parse --show-toplevel 2>/dev/null || true; "
+                "find / -mindepth 2 -maxdepth 2 -name .git -print 2>/dev/null "
+                "| while IFS= read -r marker; do "
+                "git -C \"${marker%/.git}\" rev-parse --show-toplevel "
+                "2>/dev/null || true; done; } | sort -u"
+            ),
+        )
+        workspace = select_unique_workspace((result.stdout or "").splitlines())
+        self.WORKSPACE = workspace.as_posix()
+        await self.exec_as_agent(
+            environment,
+            command=(
+                f"printf '%s\\n' {shlex.quote(self.WORKSPACE)} > "
+                f"{shlex.quote(self.MATRIX_WORKSPACE)}"
+            ),
+        )
 
     async def _write_requirements_and_capture_baseline(
         self, instruction: str, environment: BaseEnvironment

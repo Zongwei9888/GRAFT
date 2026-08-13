@@ -9,6 +9,7 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
     _changed_paths,
     capture_baseline,
     materialize_config,
+    select_unique_workspace,
 )
 from graft.registry import load_config
 
@@ -17,6 +18,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_workspace_resolution_requires_one_unique_repository(self) -> None:
+        self.assertEqual(
+            select_unique_workspace(["/testbed", "/testbed", ""]),
+            Path("/testbed"),
+        )
+        with self.assertRaisesRegex(RuntimeError, "discovered none"):
+            select_unique_workspace([])
+        with self.assertRaisesRegex(RuntimeError, "/app, /testbed"):
+            select_unique_workspace(["/testbed", "/app"])
+
     def test_featurebench_smoke_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
