@@ -282,6 +282,33 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         )
         self.assertEqual(dataset["task_names"], ["cli-2ph-simplex"])
 
+    def test_tb3_resource_bounded_cohort_configs_are_pinned(self) -> None:
+        root = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+        )
+        expected = {
+            "tb3-data-anonymization-matrix-v1.json": "data-anonymization",
+            "tb3-production-planning-matrix-v1.json": "production-planning",
+        }
+        for filename, task_name in expected.items():
+            with self.subTest(filename=filename):
+                config = json.loads((root / filename).read_text(encoding="utf-8"))
+                agent = config["agents"][0]
+                dataset = config["datasets"][0]
+                self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+                self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+                self.assertEqual(
+                    agent["kwargs"]["graft_commit"],
+                    "85043df056dd9967f3f88ab036e47eda93911d0b",
+                )
+                self.assertEqual(
+                    dataset["repo"], "harbor-framework/terminal-bench@v3.0.0"
+                )
+                self.assertEqual(dataset["task_names"], [task_name])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
