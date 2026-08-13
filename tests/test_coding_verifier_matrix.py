@@ -251,6 +251,37 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         )
         self.assertEqual(dataset["task_names"], ["cli-2ph-simplex"])
 
+    def test_tb3_causal_continuation_is_source_bound(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "tb3-cli-simplex-continuation-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        kwargs = agent["kwargs"]
+        dataset = config["datasets"][0]
+
+        self.assertEqual(
+            agent["name"],
+            "experiments.coding_verifier_matrix.matrix_continuation_agent:"
+            "MatrixContinuationCodex",
+        )
+        for key in (
+            "matrix_sha256",
+            "candidate_archive_sha256",
+            "session_sha256",
+        ):
+            self.assertRegex(kwargs[key], r"^[0-9a-f]{64}$")
+        self.assertRegex(kwargs["graft_commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(kwargs["expected_thread_id"], r"^[0-9a-f-]{36}$")
+        self.assertEqual(
+            dataset["repo"], "harbor-framework/terminal-bench@v3.0.0"
+        )
+        self.assertEqual(dataset["task_names"], ["cli-2ph-simplex"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT

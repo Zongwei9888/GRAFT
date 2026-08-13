@@ -116,3 +116,27 @@ The transport is therefore changed to Harbor's official Git-registry path
 discovers tasks from its `tasks/` tree. The task, public bytes, model, method, outcomes, and
 information boundary are unchanged. The failed package-resolution launch is an infrastructure
 attempt, not a trial.
+
+## Frozen continuation inputs
+
+Frozen after the first-candidate matrix and official score were closed, before any continuation
+container was launched:
+
+- producer thread: `019ff931-40e9-76b2-af67-fd72fe85b16e`;
+- producer session SHA-256:
+  `9db60a7edff349ad8ec82dee0270013ec93d3733ff63405907c402d5929f5eec`;
+- first-candidate tree:
+  `d3d40cdf449e2715b6b69194548f19ac9180f84f050a64b307baa1577cb76dca`;
+- checkpoint key:
+  `51e572e48f6f44de0dd19b0846b07a786a391656bc4751a8be821bfa838ded31`;
+- candidate archive SHA-256:
+  `3962ec6b5c05ac75a796d3e268d0281a0e46c17683f534502c089b1f683e7c6e`;
+- matrix SHA-256:
+  `e39d1cea40ef5da4f6f9a3562cf21cfd5ed95ea13dd909b52b702f7392ec350a`;
+- official first-candidate reward: `1.0`.
+
+The frozen Original selector chose `adversarial-simplex-test` and
+`runtime-phase-boundary-audit`, but no selected result satisfied the already-frozen portable,
+blocking, reproducible evidence rule. The continuation policy is therefore No-Op. The replay run
+must not resume Codex; it restores and submits the exact frozen candidate solely to validate the
+causal artifact path.

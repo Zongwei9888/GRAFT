@@ -1,0 +1,30 @@
+{
+  "job_name": "tb3-cli-simplex-continuation-v1",
+  "jobs_dir": "experiments/coding_verifier_matrix/jobs",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "experiments.coding_verifier_matrix.matrix_continuation_agent:MatrixContinuationCodex",
+      "model_name": "gpt-5.6-sol",
+      "kwargs": {
+        "version": "0.147.0",
+        "reasoning_effort": "high",
+        "graft_commit": "22d4510a426501fbf4e517c00fa24d2e98a0f9f1",
+        "source_job_dir": "experiments/coding_verifier_matrix/jobs/tb3-cli-simplex-matrix-v1",
+        "matrix_sha256": "e39d1cea40ef5da4f6f9a3562cf21cfd5ed95ea13dd909b52b702f7392ec350a",
+        "candidate_archive_sha256": "3962ec6b5c05ac75a796d3e268d0281a0e46c17683f534502c089b1f683e7c6e",
+        "session_sha256": "9db60a7edff349ad8ec82dee0270013ec93d3733ff63405907c402d5929f5eec",
+        "expected_thread_id": "019ff931-40e9-76b2-af67-fd72fe85b16e"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "repo": "harbor-framework/terminal-bench@v3.0.0",
+      "task_names": [
+        "cli-2ph-simplex"
+      ]
+    }
+  ]
+}
