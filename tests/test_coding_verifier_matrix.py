@@ -290,8 +290,8 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             / "configs"
         )
         expected = {
-            "tb3-data-anonymization-matrix-v1.json": "data-anonymization",
             "tb3-production-planning-matrix-v1.json": "production-planning",
+            "tb3-kv-live-surgery-matrix-v1.json": "kv-live-surgery",
         }
         for filename, task_name in expected.items():
             with self.subTest(filename=filename):

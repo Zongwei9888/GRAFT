@@ -75,3 +75,26 @@ Cohort summaries report both task success and feedback effects, including regres
 method gate requires at least one exact-candidate repair (`delta_feedback=+1`), no regression, and
 all continuation evidence satisfying promotion provenance. Otherwise the method remains unproven.
 Regardless of outcome, two tasks cannot establish statistical significance or graph superiority.
+
+## Infrastructure amendment 01: official-verifier resource bound
+
+Frozen before any Codex producer or GRAFT verifier ran for either task. The first joint Oracle
+health check showed that the selection rule omitted official-verifier resources:
+
+- `production-planning` completed with reward `1.0`;
+- `data-anonymization` declares `verifier.timeout_sec=7200` and its official verifier remained
+  active after eight minutes;
+- the health check was interrupted and recorded `data-anonymization` as `CancelledError`, with no
+  reward or model trajectory.
+
+The eligibility rule now additionally requires public `verifier.timeout_sec <= 900`. Applying the
+same already-frozen salted ranking leaves:
+
+| Order | Task | Category | Rank hash | Instruction SHA-256 | Metadata SHA-256 | Verifier timeout |
+|---:|---|---|---|---|---|---:|
+| 1 | `production-planning` | Operations | `4d7ca0c50f0f15e2d71a3d8d5bbdda6f7e6a2a9d03b46186bc207116ead8da88` | `b4e85ed8bc8e9f5ea093ae6b144ea8b66c085a585d32bfef6917eef61022e702` | `3286e0f29a4fbdeab0a07e42c3cb6632505b9a55aa214c7faf97c690447b12a1` | 120 s |
+| 2 | `kv-live-surgery` | Software | `85ca0b3ef9ba4a3f93362daa8c13cb91daa59cce2cab019009db000b4a49e57f` | `269d6398c9c2eddc309669958f810255760b6bd357963861b8d63fd4be852542` | `fe00f31bd9640a34e4ab8c0b69b06ac43b6915fb4456ca8ccdfce93686bbc57e` | 600 s |
+
+No task instruction, evaluator, score, solution, or agent output was inspected in making this
+transport/resource amendment. The canceled data task is not a method row. Its original config is
+retained only as an audit artifact and must not be launched in this cohort.
