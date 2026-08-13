@@ -11,6 +11,7 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
     _changed_paths,
     capture_baseline,
     materialize_config,
+    run_matrix,
     select_workspace,
     select_unique_workspace,
 )
@@ -163,6 +164,33 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             self.assertEqual((repo / "kept.txt").read_text(), "after\n")
             self.assertEqual((repo / "added.txt").read_text(), "added\n")
             self.assertFalse((repo / "deleted.txt").exists())
+
+    def test_matrix_stops_before_modeling_when_candidate_is_not_replayable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / "source.txt").write_text("before\n", encoding="utf-8")
+            baseline = capture_baseline(repo, root / "baselines")
+            (repo / "state.db").write_bytes(b"SQLite format 3\x00binary-state")
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(materialize_config("gpt-5.6-sol")), encoding="utf-8"
+            )
+
+            result = run_matrix(
+                repo,
+                ("Preserve and update the task state",),
+                baseline,
+                config_path=config_path,
+                candidate_archive_root=root / "candidate-archives",
+                max_verifiers=8,
+            )
+
+            self.assertEqual(result["status"], "candidate_not_replayable")
+            self.assertEqual(result["verifier_count"], 0)
+            self.assertEqual(result["candidate_archive_skipped_files"], ["state.db"])
+            self.assertNotIn("graph", result)
 
     def test_outer_container_runner_only_disables_sandbox_for_a_copy(self) -> None:
         runner = OuterContainerCopyCodexRunner(Path("/producer"))

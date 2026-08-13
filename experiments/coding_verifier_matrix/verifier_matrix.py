@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import tarfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ from typing import Any, Sequence
 
 from graft.codex.cli_runner import CliCodexRunner
 from graft.controller import GraftController
-from graft.evidence.baseline_archive import archive_baseline
+from graft.evidence.baseline_archive import BASELINE_METADATA, archive_baseline
 from graft.evidence.snapshot import hash_tree_manifest
 from graft.modeling import FeedbackGraphBuildError
 from graft.registry import default_original_config_payload, load_config
@@ -254,6 +255,7 @@ def run_matrix(
         session_id="coding-verifier-matrix-candidate",
         task_epoch=1,
     )
+    skipped_candidate_files = _archive_skipped_files(candidate_archive)
     common = {
         "version": 1,
         "experiment": "coding-verifier-matrix",
@@ -267,6 +269,7 @@ def run_matrix(
         "changed_paths": list(changed),
         "candidate_archive_path": str(candidate_archive),
         "candidate_archive_sha256": _sha256_file(candidate_archive),
+        "candidate_archive_skipped_files": list(skipped_candidate_files),
         "config_source": "frozen_experiment_config",
         "config_hash": snapshot.config_hash,
         "official_evaluator_visible": False,
@@ -280,6 +283,13 @@ def run_matrix(
     }
     if not changed:
         return {**common, "status": "no_candidate_change", "verifier_count": 0}
+    if skipped_candidate_files:
+        return {
+            **common,
+            "status": "candidate_not_replayable",
+            "reason": "candidate_archive_skipped_files",
+            "verifier_count": 0,
+        }
 
     try:
         graph = controller.graph_builder.build(
@@ -387,6 +397,23 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _archive_skipped_files(path: Path) -> tuple[str, ...]:
+    """Read the immutable archive manifest without extracting candidate files."""
+
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            metadata_file = archive.extractfile(BASELINE_METADATA)
+            if metadata_file is None:
+                raise ValueError("Candidate archive metadata is missing")
+            metadata = json.load(metadata_file)
+    except (OSError, tarfile.TarError, json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("Candidate archive metadata is invalid") from exc
+    raw = metadata.get("skipped_files", [])
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        raise ValueError("Candidate archive skipped_files is invalid")
+    return tuple(sorted(set(raw)))
 
 
 if __name__ == "__main__":

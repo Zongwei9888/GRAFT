@@ -798,3 +798,17 @@ substitution，现在会先安全解包，再对 inner argv 应用相同 frozen-
 generated script、compound command、environment assignment 和嵌套 shell 继续拒绝。该修复
 只能算 post-hoc 工程改进，必须在新任务上验证。完整证据见
 `experiments/coding_verifier_matrix/TB3-CAUSAL-01-RESULT.md`。
+
+## 15. 2026-08-13 服务状态任务暴露的完整环境隔离缺口
+
+资源受限 TB3 cohort 的首个 `production-planning` producer 完成了真实 ERP/MES/WMS 写回，但候选
+archive 跳过三个数据库和一个 gateway 文件。之后 7 个 shadow verifier 全部因 producer workspace 在
+验证期间变化而作废；公开要求与 verifier 命令使用绝对 `/app` 路径，说明普通 temporary directory copy
+无法隔离 service-backed task。shadow 后官方得分为 `0.0`，但状态已污染，既不能作为 first-candidate
+分数，也不能作为 GRAFT feedback 分数，整行必须 censor。
+
+已增加与任务无关的 preflight：候选 archive 只要存在任何 `skipped_files`，就在 LLM 构图和 verifier
+运行前返回 `candidate_not_replayable`，保留原 candidate 给官方 evaluator。第二个 cohort producer 暂停，
+避免在已知失效的隔离上继续花费。要恢复 service-backed 实验，必须让每个 verifier 获得完整任务环境与
+服务状态分支，而不是只复制工作目录；branch 中的 `/app` 与服务 endpoint 不能回到 producer。
+完整记录见 `experiments/coding_verifier_matrix/TB3-COHORT-02-INTERIM.md`。
