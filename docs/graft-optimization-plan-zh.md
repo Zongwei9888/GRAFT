@@ -734,3 +734,22 @@ pairwise，所以门槛理论不可达，必须作废而不能据此宣布 high-
 适用的 10 个比较中胜 7 次，3/4 元平均 MAE 略低，但存在单折明显反转，属于混合证据。另有 4/5 个
 training fold 在 10% set-FPR 下无可行 OR portfolio；唯一可行折从 development 0.0986 漂移到 held-out
 0.1549。这强化了“不使用 point-estimate FPR 上线”的结论。
+
+## 12. 2026-08-13 首个可执行 Coding Verifier Matrix
+
+FeatureBench Metaflow 的 source-matched smoke 已完成。Native Codex candidate 在官方 evaluator 得分
+`1.0`；GRAFT 在完全不反馈、不可修改 producer 的 shadow 模式下动态构造 9 个 Behavior、18 个
+Failure Mode、7 个 verifier 与 6 个 blind-spot scenario。三个 verifier 给出了由真实命令事件支持的
+blocking reproduction，另有三个 verifier timeout。producer 前后 tree hash 相同。
+
+这个结果只证明“未见任务 → 动态假设 → 动态 verifier → 可执行 evidence matrix”的数据管线成立。
+它不证明最终效用：官方 label 与多个 public-requirement reproduction 不一致，需要独立 adjudication；
+默认 budget `4.0` 的选择包含一个成功 adversarial verifier 和一个 timeout verifier；移除全部 blind-spot
+scenario 后选择完全相同，所以本样本上图没有正向因果作用。相同 candidate 的两次 graph sample 的
+Behavior/Failure 数量也不同，暴露 graph stability 问题。
+
+此外，Harbor 的 producer trajectory 统计没有包含 nested shadow Codex 调用，job dollar cost 不能当作
+GRAFT 总成本。完整 token lower bound、artifact hash、finding 强弱边界与后续 same-thread promotion
+协议见 `experiments/coding_verifier_matrix/SMOKE-02.md`。下一步先做独立 finding adjudication 与严格标注
+为 post-hoc 的 shared-prefix repair/promotion 机制实验，再扩展多任务矩阵；不得从这个单样本声称 GRAFT
+优于 Native Codex 或高阶图有效。
