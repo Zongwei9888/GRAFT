@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from experiments.agent_reward_bench.analyze_selection import analyze
+from experiments.agent_reward_bench.run_crossfit import run_crossfit
 from experiments.agent_reward_bench.run_selection import (
     MatrixRow,
     SelectionModel,
@@ -194,6 +195,40 @@ class AgentRewardSelectionTests(unittest.TestCase):
                 "not_part_of_frozen_primary_method"
             ]
         )
+
+    def test_crossfit_keeps_task_groups_held_out_and_never_claims_method(self) -> None:
+        primary = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
+        primary["inference"]["paired_group_bootstrap_samples"] = 2
+        crossfit = json.loads(
+            (PROTOCOL_PATH.parent / "crossfit_protocol.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        crossfit["folds"]["count"] = 2
+        crossfit["cardinalities"] = [1, 2]
+        crossfit["selector"]["cardinality_budgets"] = [1, 2]
+        crossfit["selector"]["set_fpr"] = 1.0
+        crossfit["selector"]["paired_group_bootstrap_samples"] = 2
+        rows = tuple(
+            row(
+                f"trajectory-{index}",
+                index % 2,
+                {
+                    "a": index % 2,
+                    "b": (index // 2) % 2,
+                    "c": (index // 3) % 2,
+                    "d": (index // 5) % 2,
+                },
+                task_id=f"task-{index}",
+            )
+            for index in range(40)
+        )
+
+        result = run_crossfit(rows, crossfit, primary)
+
+        self.assertEqual(result["summary"]["group_overlap"], 0)
+        self.assertFalse(result["summary"]["positive_method_claim"])
+        self.assertEqual(len(result["folds"]), 2)
 
     def test_incomplete_matrix_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

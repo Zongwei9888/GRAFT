@@ -54,4 +54,16 @@ This reports independence/pairwise/high-order calibration error, graph density, 
 set-FPR retention, and a clearly labeled consensus-rule exploration. It does not amend the frozen
 primary protocol or turn exploratory findings into confirmatory evidence.
 
+The separately frozen post-hoc grouped cross-fit protocol is reproducible with:
+
+```bash
+python3 -m experiments.agent_reward_bench.run_crossfit \
+  --matrix /path/to/output/matrix.jsonl \
+  --output /path/to/output/crossfit-results.json
+```
+
+It measures whether calibration findings survive five task-group-held-out folds. Because the
+original test was already opened before this protocol was created, its output is robustness
+evidence only and can never replace the primary result.
+
 No raw upstream trajectories or judgments are redistributed by this repository.

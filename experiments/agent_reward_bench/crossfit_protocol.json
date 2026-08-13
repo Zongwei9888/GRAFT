@@ -1,0 +1,39 @@
+{
+  "analysis_version": 1,
+  "status": "posthoc_robustness_frozen_before_fold_execution",
+  "frozen_at": "2026-08-13",
+  "confirmatory": false,
+  "reason": "The original frozen test has already been opened. This protocol measures split robustness and cannot replace the primary no-go result.",
+  "dataset_revision": "b6d17e646009d6cb63d5dd7be78807b680693f61",
+  "primary_protocol": "protocol.json",
+  "primary_protocol_sha256": "34921c29fe0ad7f49f38df2b0ac90b2cb589e3dddb2ca3b3b9d998c1d669291f",
+  "folds": {
+    "count": 5,
+    "group_key": ["benchmark", "task_id"],
+    "assignment": "sha256_mod_fold_count",
+    "salt": "graft-arb-crossfit-v1"
+  },
+  "models": [
+    "independent",
+    "pairwise",
+    "lineage_nominated_shrunk_high_order"
+  ],
+  "cardinalities": [1, 2, 3, 4],
+  "metrics": [
+    "macro_portfolio_recall_mae",
+    "high_order_nomination_density",
+    "development_feasible_portfolios",
+    "heldout_set_fpr"
+  ],
+  "selector": {
+    "run_frozen_primary_selector_per_fold": true,
+    "set_fpr": 0.1,
+    "cardinality_budgets": [1, 2, 3, 4],
+    "paired_group_bootstrap_samples": 500
+  },
+  "decision_rules": {
+    "pairwise_measurement_supported": "pairwise recall MAE is lower than independence in at least 12 of 15 fold-by-cardinality comparisons for sizes 2-4",
+    "high_order_candidate_supported": "high-order recall MAE is lower than pairwise in at least 12 of 15 fold-by-cardinality comparisons for sizes 2-4",
+    "positive_method_claim": "never granted by this post-hoc analysis"
+  }
+}
