@@ -53,6 +53,31 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             ],
         )
 
+    def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "featurebench-metaflow-matrix-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        dataset = config["datasets"][0]
+
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+        self.assertEqual(
+            agent["kwargs"]["graft_commit"],
+            "9c4f565af06140c0b02f752fbeeb455f9229b4f3",
+        )
+        self.assertEqual(dataset["name"], "featurebench-lite")
+        self.assertEqual(dataset["version"], "1.0")
+        self.assertEqual(
+            dataset["task_names"],
+            ["netflix__metaflow.b390a8d4.test_stub_generator.7bf08c98.lv1"],
+        )
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
