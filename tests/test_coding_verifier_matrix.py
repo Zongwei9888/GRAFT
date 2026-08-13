@@ -11,6 +11,7 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
     _changed_paths,
     capture_baseline,
     materialize_config,
+    select_workspace,
     select_unique_workspace,
 )
 from experiments.coding_verifier_matrix.continuation_replay import (
@@ -183,6 +184,27 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             select_unique_workspace([])
         with self.assertRaisesRegex(RuntimeError, "/app, /testbed"):
             select_unique_workspace(["/testbed", "/app"])
+
+    def test_workspace_resolution_prefers_current_enclosing_git_root(self) -> None:
+        self.assertEqual(
+            select_workspace(
+                "/workspace/project/src",
+                ["/opt/controller", "/workspace/project", "/workspace/project/src/lib"],
+            ),
+            Path("/workspace/project"),
+        )
+
+    def test_workspace_resolution_supports_non_git_task_directory(self) -> None:
+        self.assertEqual(
+            select_workspace("/app", ["/opt/controller", "/tools/another-repo"]),
+            Path("/app"),
+        )
+
+    def test_workspace_resolution_rejects_root_fallback(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "Unsafe task working directory"):
+            select_workspace("/", [])
+        with self.assertRaisesRegex(RuntimeError, "not reported"):
+            select_workspace("", ["/app"])
 
     def test_featurebench_smoke_is_source_and_runtime_pinned(self) -> None:
         path = (

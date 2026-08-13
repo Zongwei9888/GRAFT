@@ -19,6 +19,38 @@ from graft.schema import RunConfig, Verdict, VerifierResult, to_jsonable
 from graft.verifiers import VerifierExecutor
 
 
+def select_workspace(current_directory: str, git_candidates: Sequence[str]) -> Path:
+    """Resolve the task workspace without assuming that it is a Git worktree.
+
+    A benchmark container can contain tool or controller repositories unrelated to
+    the task. The current task directory therefore has authority: prefer its
+    closest enclosing Git worktree, otherwise use the directory itself. A root
+    working directory is not a safe fallback because snapshotting it could traverse
+    the whole container.
+    """
+
+    current_text = current_directory.strip()
+    if not current_text:
+        raise RuntimeError("Task working directory was not reported")
+    current = Path(current_text).resolve()
+    if not current.is_absolute() or current == Path(current.anchor):
+        raise RuntimeError(f"Unsafe task working directory: {current}")
+
+    roots = {
+        Path(candidate.strip()).resolve()
+        for candidate in git_candidates
+        if candidate.strip()
+    }
+    enclosing = tuple(
+        root for root in roots if root == current or root in current.parents
+    )
+    if enclosing:
+        # Nested worktrees are legitimate. The closest enclosing root owns the
+        # current task directory even if unrelated repositories also exist.
+        return max(enclosing, key=lambda path: len(path.parts))
+    return current
+
+
 def select_unique_workspace(candidates: Sequence[str]) -> Path:
     """Return the single discovered Git worktree or fail the infrastructure row.
 

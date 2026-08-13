@@ -12,7 +12,7 @@ from harbor.models.trial.paths import EnvironmentPaths
 from experiments.terminal_bench.graft_codex_agent import NativeCodex
 from experiments.terminal_bench.graft_original_codex_agent import GraftOriginalCodex
 from experiments.coding_verifier_matrix.verifier_matrix import (
-    select_unique_workspace,
+    select_workspace,
 )
 
 
@@ -51,11 +51,12 @@ class VerifierMatrixCodex(GraftOriginalCodex):
         await self._run_shadow_matrix(environment)
 
     async def _resolve_workspace(self, environment: BaseEnvironment) -> None:
-        """Discover the benchmark worktree without task-name or dataset branches."""
+        """Discover the benchmark workspace without task-name or dataset branches."""
 
         result = await self.exec_as_agent(
             environment,
             command=(
+                "pwd -P; printf '\\n__GRAFT_GIT_ROOTS__\\n'; "
                 "{ git rev-parse --show-toplevel 2>/dev/null || true; "
                 "find / -mindepth 2 -maxdepth 2 -name .git -print 2>/dev/null "
                 "| while IFS= read -r marker; do "
@@ -63,7 +64,11 @@ class VerifierMatrixCodex(GraftOriginalCodex):
                 "2>/dev/null || true; done; } | sort -u"
             ),
         )
-        workspace = select_unique_workspace((result.stdout or "").splitlines())
+        discovery = result.stdout or ""
+        current, separator, roots = discovery.partition("\n__GRAFT_GIT_ROOTS__\n")
+        if not separator:
+            raise RuntimeError("Workspace discovery output was malformed")
+        workspace = select_workspace(current, roots.splitlines())
         self.WORKSPACE = workspace.as_posix()
         await self.exec_as_agent(
             environment,
