@@ -70,3 +70,7 @@ feedback/promotion experiment measuring `official_post_feedback - official_pre_f
   be satisfied locally and records the Wav2Vec2 smoke as an infrastructure cancellation.
 - [Amendment 02](AMENDMENT-02.md) censors the first Metaflow matrix for nested seccomp failure and
   freezes an outer-container plus per-verifier-copy replacement isolation.
+- [Amendment 04](AMENDMENT-04.md) replaces same-environment shadow execution with one complete
+  restored task environment per dynamically planned verifier. It freezes the causal boundary after
+  the censored service-backed Terminal-Bench row and before any environment-branch effectiveness
+  trial.

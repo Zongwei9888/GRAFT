@@ -163,3 +163,55 @@ class VerifierMatrixCodex(GraftOriginalCodex):
                 )
             except Exception:
                 self.logger.exception("Could not clean the matrix Codex home")
+
+
+class CandidateCaptureCodex(VerifierMatrixCodex):
+    """Run only Native Codex, then freeze its candidate for later branches.
+
+    No GRAFT model stage or verifier runs in this trial. Harbor's evaluator thus
+    scores the unobserved first candidate rather than a shadow-modified workspace.
+    """
+
+    CANDIDATE_OUTPUT = "/logs/agent/verifier-candidate.json"
+
+    @staticmethod
+    @override
+    def name() -> str:
+        return "codex-candidate-capture"
+
+    @override
+    async def run(
+        self,
+        instruction: str,
+        environment: BaseEnvironment,
+        context: AgentContext,
+    ) -> None:
+        await self._resolve_workspace(environment)
+        await self._write_requirements_and_capture_baseline(instruction, environment)
+        previous_workdir = environment.task_env_config.workdir
+        environment.task_env_config.workdir = self.WORKSPACE
+        try:
+            await NativeCodex.run(self, instruction, environment, context)
+        finally:
+            environment.task_env_config.workdir = previous_workdir
+        await self._capture_candidate(environment)
+
+    async def _capture_candidate(self, environment: BaseEnvironment) -> None:
+        pythonpath = f"{self.GRAFT_SOURCE}:{self.GRAFT_SOURCE}/src"
+        await self.exec_as_agent(
+            environment,
+            command=(
+                f"PYTHONPATH={shlex.quote(pythonpath)} python3 -m "
+                "experiments.coding_verifier_matrix.verifier_matrix candidate "
+                f"--repo {shlex.quote(self.WORKSPACE)} "
+                f"--baseline {shlex.quote(self.MATRIX_BASELINE)} "
+                f"--requirements {shlex.quote(self.MATRIX_REQUIREMENTS)} "
+                f"--config {shlex.quote(self.MATRIX_CONFIG)} "
+                f"--output {shlex.quote(self.CANDIDATE_OUTPUT)} "
+                f"--archive-root {shlex.quote(self.MATRIX_CANDIDATE_ARCHIVES)}"
+            ),
+            env={
+                "GRAFT_CONFIG_HOME": self.GRAFT_CONFIG_HOME,
+                "GRAFT_STATE_HOME": self.GRAFT_STATE_HOME,
+            },
+        )

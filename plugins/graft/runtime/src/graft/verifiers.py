@@ -28,8 +28,20 @@ from graft.schema import (
 
 
 class VerifierExecutor:
-    def __init__(self, *, codex_runner: CliCodexRunner | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        codex_runner: CliCodexRunner | None = None,
+        protect_source_workspace: bool = True,
+        disposable_environment: bool = False,
+    ) -> None:
         self.codex_runner = codex_runner or CliCodexRunner()
+        # Product execution treats the frozen candidate as immutable.  A benchmark
+        # may instead run exactly one verifier in an expendable, whole-environment
+        # branch whose workspace is allowed to change.  That research-only caller
+        # must opt out explicitly; protecting the source remains the safe default.
+        self.protect_source_workspace = protect_source_workspace
+        self.disposable_environment = disposable_environment
 
     def run(
         self,
@@ -140,11 +152,15 @@ class VerifierExecutor:
                 else:
                     promotion_outcome = PromotionOutcome.UNRESOLVED
 
-        mutation = _producer_workspace_mutation(
-            snapshot,
-            requirements,
-            config_path,
-            environment_fingerprint,
+        mutation = (
+            _producer_workspace_mutation(
+                snapshot,
+                requirements,
+                config_path,
+                environment_fingerprint,
+            )
+            if self.protect_source_workspace
+            else None
         )
         if mutation:
             return self._error_result(spec, snapshot, duration, mutation)
@@ -186,6 +202,7 @@ class VerifierExecutor:
             graph,
             config_path=config_path,
             environment_fingerprint=environment_fingerprint,
+            disposable_environment=self.disposable_environment,
         )
         verdict_schema = Path(
             str(files("graft").joinpath("resources", "verifier_verdict.schema.json"))
@@ -258,6 +275,7 @@ class VerifierExecutor:
                 snapshot,
                 requirements,
                 spec,
+                disposable_environment=self.disposable_environment,
             )
             claimed_reproducible = bool(raw.get("reproducible", False))
             reproducible = (
@@ -290,11 +308,15 @@ class VerifierExecutor:
                 ):
                     promotion_outcome = PromotionOutcome.UNRESOLVED
 
-        mutation = _producer_workspace_mutation(
-            snapshot,
-            requirements,
-            config_path,
-            environment_fingerprint,
+        mutation = (
+            _producer_workspace_mutation(
+                snapshot,
+                requirements,
+                config_path,
+                environment_fingerprint,
+            )
+            if self.protect_source_workspace
+            else None
         )
         if mutation:
             return self._error_result(spec, snapshot, turn.duration_s, mutation)
@@ -355,6 +377,7 @@ def _verifier_prompt(
     *,
     config_path: Path,
     environment_fingerprint: str,
+    disposable_environment: bool = False,
 ) -> str:
     by_failure = {item.failure_mode_id: item for item in graph.failure_modes}
     targets = [by_failure[item] for item in spec.failure_modes if item in by_failure]
@@ -389,11 +412,19 @@ Use fixed_and_preserved only with executed evidence for both the repaired findin
 preserved behavior. Use regressed when the repair fixes or changes the target but violates a named
 raw or unchanged-baseline behavior.
 """
-    mode = (
-        "You may create temporary tests and artifacts because this is a disposable workspace copy."
-        if spec.isolation == "temporary-copy"
-        else "Do not modify files. You may inspect and execute read-only checks."
-    )
+    if disposable_environment:
+        mode = (
+            "This entire task environment is an expendable verifier branch restored from the "
+            "frozen candidate. You may create temporary tests and artifacts here; no producer "
+            "or other verifier shares this branch."
+        )
+    elif spec.isolation == "temporary-copy":
+        mode = (
+            "You may create temporary tests and artifacts because this is a disposable "
+            "workspace copy."
+        )
+    else:
+        mode = "Do not modify files. You may inspect and execute read-only checks."
     return f"""You are a task-specific verifier instantiated by {graph.method}.
 
 Verifier objective:
@@ -547,6 +578,8 @@ def _blocking_reproduced_modes(
     snapshot: SourceSnapshot,
     requirements: tuple[str, ...],
     spec: VerifierSpec,
+    *,
+    disposable_environment: bool = False,
 ) -> tuple[str, ...]:
     observed = _observed_commands(events)
     reproduced: list[str] = []
@@ -577,7 +610,10 @@ def _blocking_reproduced_modes(
             valid_refs = {f"R{index}" for index in range(1, len(requirements) + 1)}
             if (
                 spec.kind != "codex_agent"
-                or spec.isolation != "temporary-copy"
+                or (
+                    spec.isolation != "temporary-copy"
+                    and not disposable_environment
+                )
                 or item.kind not in {"runtime", "test", "trace", "state"}
                 or not observed_command
                 or not item.requirement_refs

@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import json
 import hashlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from experiments.coding_verifier_matrix.verifier_matrix import (
+    DisposableBranchCodexRunner,
     OuterContainerCopyCodexRunner,
     _changed_paths,
+    assemble_branch_matrix,
     capture_baseline,
+    capture_candidate,
     materialize_config,
     run_matrix,
+    run_verifier_branch,
     select_workspace,
     select_unique_workspace,
 )
@@ -37,6 +42,126 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_legacy_copy_matrix_fails_closed_on_absolute_workspace_contract(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / "source.txt").write_text("before\n", encoding="utf-8")
+            baseline = capture_baseline(repo, root / "baselines")
+            (repo / "source.txt").write_text("after\n", encoding="utf-8")
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(materialize_config("gpt-5.6-sol")), encoding="utf-8"
+            )
+
+            result = run_matrix(
+                repo,
+                (f"Write the result below `{repo.resolve()}/output`.",),
+                baseline,
+                config_path=config_path,
+                candidate_archive_root=root / "candidate-archives",
+                max_verifiers=8,
+            )
+
+            self.assertEqual(result["status"], "isolation_not_supported")
+            self.assertEqual(result["absolute_workspace_requirement_refs"], ["R1"])
+            self.assertEqual(result["verifier_count"], 0)
+            self.assertNotIn("graph", result)
+
+    def test_independent_verifier_branch_may_mutate_only_its_disposable_tree(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / "source.txt").write_text("before\n", encoding="utf-8")
+            baseline = capture_baseline(repo, root / "baselines")
+            (repo / "source.txt").write_text("candidate\n", encoding="utf-8")
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(materialize_config("gpt-5.6-sol")), encoding="utf-8"
+            )
+            requirements = ("Keep the public result correct.",)
+            candidate = capture_candidate(
+                repo,
+                requirements,
+                baseline,
+                config_path=config_path,
+                archive_root=root / "candidates",
+            )
+            self.assertEqual(candidate["status"], "candidate_captured")
+            graph = FeedbackGraph(
+                source_hash=candidate["checkpoint_key"],
+                behaviors=(
+                    Behavior("B1", "keep result correct", ("R1",), ("result",), 1, 1, 1),
+                ),
+                failure_modes=(
+                    FailureMode("F1", "B1", "result is wrong", "runtime", (), (), 1),
+                ),
+                verifiers=(
+                    VerifierSpec(
+                        verifier_id="branch-check",
+                        kind="command",
+                        cost=1,
+                        blocking=True,
+                        failure_modes=("F1",),
+                        command=(
+                            sys.executable,
+                            "-c",
+                            "from pathlib import Path; "
+                            "Path('source.txt').write_text('verifier\\n'); "
+                            "raise SystemExit(1)",
+                        ),
+                    ),
+                ),
+                shared_blind_spots=(),
+            )
+            plan = {
+                **candidate,
+                "phase": "plan",
+                "status": "planned",
+                "graph": to_jsonable(graph),
+                "verifier_count": 1,
+                "verifier_ids": ["branch-check"],
+            }
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+            branch = run_verifier_branch(
+                repo,
+                requirements,
+                baseline,
+                plan_path=plan_path,
+                config_path=config_path,
+                verifier_id="branch-check",
+            )
+
+            self.assertEqual(branch["status"], "complete")
+            self.assertTrue(branch["branch_mutated"])
+            self.assertEqual(branch["result"]["verdict"], "fail")
+            self.assertTrue(branch["result"]["reproducible"])
+            branch_path = root / "branch.json"
+            branch_path.write_text(json.dumps(branch), encoding="utf-8")
+            matrix = assemble_branch_matrix(plan_path, (branch_path,))
+            self.assertEqual(matrix["status"], "complete")
+            self.assertTrue(matrix["producer_untouched_by_design"])
+            self.assertEqual(
+                matrix["eligible_reproducible_failure_verifiers"],
+                ["branch-check"],
+            )
+
+    def test_disposable_branch_runner_rejects_another_workspace(self) -> None:
+        runner = DisposableBranchCodexRunner(Path("/branch"))
+        config = runner.branch_config(Path("/branch"), RunConfig())
+        self.assertEqual(config.sandbox, "danger-full-access")
+        self.assertFalse(config.network_access)
+        with self.assertRaisesRegex(RuntimeError, "non-branch"):
+            runner.branch_config(Path("/producer"), RunConfig())
+
     def test_nonportable_selected_evidence_becomes_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
