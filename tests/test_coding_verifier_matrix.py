@@ -502,6 +502,34 @@ class CodingVerifierMatrixTests(unittest.TestCase):
                 )
                 self.assertEqual(dataset["task_names"], [task_name])
 
+    def test_tb3_environment_branch_candidate_is_source_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "tb3-vf2-candidate-capture-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        dataset = config["datasets"][0]
+
+        self.assertEqual(
+            agent["name"],
+            "experiments.coding_verifier_matrix.matrix_codex_agent:"
+            "CandidateCaptureCodex",
+        )
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+        self.assertEqual(
+            agent["kwargs"]["graft_commit"],
+            "42e3cdebc476a6f4e6a16033ed7e8ecfd9c9f193",
+        )
+        self.assertEqual(
+            dataset["repo"], "harbor-framework/terminal-bench@v3.0.0"
+        )
+        self.assertEqual(dataset["task_names"], ["vf2-speedup-networkx"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
