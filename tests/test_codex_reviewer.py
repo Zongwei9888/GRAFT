@@ -396,6 +396,51 @@ class CodexReviewerTests(unittest.TestCase):
                 )
             )
 
+    def test_simple_shell_transport_unwraps_to_portable_inline_argv(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "candidate.py").write_text("value = 1\n", encoding="utf-8")
+            snapshot = freeze_source(root, requirements=("Keep value correct",))
+            script = "import candidate; assert candidate.value == 1"
+            payload = " ".join(
+                shlex.quote(part) for part in ("python3", "-c", script)
+            )
+
+            self.assertTrue(
+                _portable_reproduction_command(
+                    ("bash", "-lc", payload), root, snapshot
+                )
+            )
+            self.assertTrue(
+                _portable_reproduction_command((payload,), root, snapshot)
+            )
+
+    def test_shell_transport_cannot_hide_nonportable_or_compound_command(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "candidate.py").write_text("value = 1\n", encoding="utf-8")
+            snapshot = freeze_source(root, requirements=("Keep value correct",))
+
+            self.assertFalse(
+                _portable_reproduction_command(
+                    ("bash", "-lc", "python3 verifier_check.py"), root, snapshot
+                )
+            )
+            self.assertFalse(
+                _portable_reproduction_command(
+                    ("bash", "-lc", "echo setup && python3 -c 'print(1)'"),
+                    root,
+                    snapshot,
+                )
+            )
+            self.assertFalse(
+                _portable_reproduction_command(
+                    ("bash", "-lc", "PYTHONPATH=/tmp python3 -c 'print(1)'"),
+                    root,
+                    snapshot,
+                )
+            )
+
     def _run_evidence_case(
         self,
         root: Path,

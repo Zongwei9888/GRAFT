@@ -779,3 +779,22 @@ verifier 都用事件匹配的命令发现裸任务环境中 `import agent_code`
 反事实审计，不能覆盖原 treatment。完整 hash、token、选择与 promotion 记录见
 `experiments/coding_verifier_matrix/PROSPECTIVE-01-RESULT.md`。在 portable evidence 与契约冲突规则完成
 回归验证前，不再扩大在线任务；之后应优先选择非饱和或 graded outcome，再进入 paired multi-task 试验。
+
+## 14. 2026-08-13 Terminal-Bench 3.0 首个严格 No-Op 因果结果
+
+在官方 Git `v3.0.0` 的新任务 `cli-2ph-simplex` 上，Native/shared-prefix Codex 的 first candidate
+官方得分 `1.0`。GRAFT 在候选冻结后构造 13 个 Behavior、11 个 Failure Mode、7 个 verifier 和 6 条
+高阶 blind-spot edge；producer 源码在 shadow matrix 前后完全一致。Original selector 选中两个 verifier，
+但预计覆盖率仅 `0.009952`、剩余风险 `0.990048`，说明旧目标仍会为极低覆盖集合付费。
+
+一个 adversarial verifier 发现了极小正目标系数被固定绝对容差忽略的可执行反例，但把自包含
+`python3 -c` 命令报告在 `bash -lc` transport wrapper 内。已冻结的 portability 规则拒绝所有 shell
+wrapper，因此最终 `no_eligible_feedback`。哈希绑定的 continuation replay 没有恢复 Codex、没有产生模型
+token，提交相同 checkpoint 后官方得分仍为 `1.0`，故 `delta_feedback=0`。
+
+这证明 No-Op 与 causal replay 路径正确，不证明 GRAFT 提升效果。它同时暴露一个通用的 false-negative：
+若 shell payload 可解析为唯一单进程 argv，且不含 pipeline、序列、重定向、subshell 或 command
+substitution，现在会先安全解包，再对 inner argv 应用相同 frozen-file/inline-program portability 规则；
+generated script、compound command、environment assignment 和嵌套 shell 继续拒绝。该修复
+只能算 post-hoc 工程改进，必须在新任务上验证。完整证据见
+`experiments/coding_verifier_matrix/TB3-CAUSAL-01-RESULT.md`。

@@ -667,11 +667,38 @@ def portable_reproduction_argv(
 
     if not command:
         return False
+    if len(command) == 1 and any(character.isspace() for character in command[0]):
+        try:
+            parsed = tuple(shlex.split(command[0]))
+        except ValueError:
+            return False
+        return portable_reproduction_argv(
+            parsed,
+            frozen_files=frozen_files,
+            run_root=run_root,
+        )
     root = run_root.resolve() if run_root is not None else None
     executable = Path(command[0]).name
-    if executable in {"bash", "sh", "zsh"} and any(
-        flag in command for flag in ("-c", "-lc")
-    ):
+    if executable in {"bash", "sh", "zsh"}:
+        for flag in ("-c", "-lc"):
+            if flag not in command:
+                continue
+            index = command.index(flag)
+            # Only unwrap the conventional ``shell -c payload`` transport. Extra
+            # setup arguments or post-payload values make replay semantics unclear.
+            if index != 1 or index + 2 != len(command):
+                return False
+            inner = _simple_shell_argv(command[index + 1])
+            if inner is None or Path(inner[0]).name in {"bash", "sh", "zsh"}:
+                return False
+            assignment_name, separator, _ = inner[0].partition("=")
+            if separator and assignment_name.isidentifier():
+                return False
+            return portable_reproduction_argv(
+                inner,
+                frozen_files=frozen_files,
+                run_root=run_root,
+            )
         return False
     inline_payload_indexes: set[int] = set()
     inline_flags = {
