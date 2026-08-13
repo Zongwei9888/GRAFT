@@ -726,3 +726,11 @@ fold 上估计经验相关，并按任务域/难度校准；可行性必须采�
 verifier，但其输出是 finding proposal，只有 executable reproduction/authority promotion 才能阻断
 Codex。完整结果、artifact hash 与复现命令见
 `experiments/agent_reward_bench/RESULTS.md`。
+
+五折 task-group cross-fit 的事后稳健性结果进一步限定结论：pairwise 相对 independence 在 15 个有效
+比较中胜 14 次，超过冻结的 12/15 measurement 门，因而“不能假设 verifier 独立”具有稳健证据。
+原 cross-fit 协议却误把 cardinality=2 计入 high-order 的 12/15 门；该规模上 high-order 按定义等于
+pairwise，所以门槛理论不可达，必须作废而不能据此宣布 high-order 失败。可描述结果是 high-order 在
+适用的 10 个比较中胜 7 次，3/4 元平均 MAE 略低，但存在单折明显反转，属于混合证据。另有 4/5 个
+training fold 在 10% set-FPR 下无可行 OR portfolio；唯一可行折从 development 0.0986 漂移到 held-out
+0.1549。这强化了“不使用 point-estimate FPR 上线”的结论。

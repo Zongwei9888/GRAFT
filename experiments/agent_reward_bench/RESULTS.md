@@ -103,3 +103,31 @@ result:
 
 The raw upstream judgments are not redistributed. Reproduction commands are documented in
 `README.md` in this directory.
+
+## Post-hoc grouped cross-fit robustness result
+
+Artifact SHA-256 before validity annotation:
+`301f210065e0f6b5114f978300d282bd2191b46f3dcca4892a4bd6c7a9cd2dea`.
+The corrected artifact, which preserves the frozen threshold but emits a null high-order decision,
+has SHA-256 `db6cd7894f62d0192d3c2eac5a44026efaa1f0b9ea6f4018074f5931525a8cf8`.
+
+Five task-group-held-out folds produce 15 valid pairwise-versus-independence comparisons for
+cardinalities two through four. Pairwise wins 14/15, exceeding the frozen 12/15 robustness rule.
+This supports the measurement finding that verifier misses cannot generally be treated as
+independent.
+
+The frozen high-order decision rule contains a structural error: it also requires 12 wins among
+the same 15 comparisons, but at cardinality two the implemented high-order model is defined to be
+identical to pairwise. Only 10 comparisons can possibly be strict high-order wins. The rule is
+therefore unreachable and must not be used to declare either success or failure.
+
+Descriptively, high-order beats pairwise in 7/10 applicable fold-by-cardinality comparisons and has
+lower mean held-out MAE for both triples (0.01864 vs 0.01933) and quadruples (0.01575 vs 0.01786).
+One fold reverses the result strongly, graph nomination remains dense, and the original frozen
+split favored pairwise. The honest conclusion is mixed evidence requiring an independent protocol
+and dataset, not a positive high-order claim.
+
+The 0.10 set-FPR deployment problem remains decisive: four of five training folds have no feasible
+judge or OR portfolio. The sole feasible fold selects one judge at development FPR 0.0986, but its
+held-out FPR is 0.1549; the held-out oracle has no feasible portfolio. Thus point-estimate FPR
+selection remains unsafe even with substantially larger training partitions.

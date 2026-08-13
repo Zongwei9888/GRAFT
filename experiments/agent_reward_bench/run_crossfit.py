@@ -92,7 +92,7 @@ def run_crossfit(
             )
         )
 
-    comparisons = tuple(
+    pairwise_comparisons = tuple(
         item
         for fold in folds
         for item in fold["calibration_by_cardinality"]
@@ -100,27 +100,42 @@ def run_crossfit(
     )
     pairwise_wins = sum(
         item["pairwise_heldout_mae"] < item["independent_heldout_mae"]
-        for item in comparisons
+        for item in pairwise_comparisons
+    )
+    high_order_comparisons = tuple(
+        item for item in pairwise_comparisons if item["cardinality"] >= 3
     )
     high_order_wins = sum(
         item["high_order_heldout_mae"] < item["pairwise_heldout_mae"]
-        for item in comparisons
+        for item in high_order_comparisons
     )
-    multi_judge_cardinalities = sum(
-        int(item) >= 2 for item in crossfit_protocol["cardinalities"]
-    )
-    required = math.ceil(0.8 * fold_count * multi_judge_cardinalities)
+    pairwise_required = math.ceil(0.8 * len(pairwise_comparisons))
+    # The v1 prose accidentally applied the same 12/15 rule to high-order even
+    # though the high-order model is identical to pairwise at cardinality two.
+    # Preserve that frozen threshold, but do not emit a pass/fail claim for a
+    # structurally unreachable rule after the result has been observed.
+    frozen_high_order_required = pairwise_required
+    high_order_rule_valid = frozen_high_order_required <= len(high_order_comparisons)
     return {
         "summary": {
             "folds": fold_count,
             "task_groups": len(assignments),
             "group_overlap": 0,
-            "multi_judge_fold_size_comparisons": len(comparisons),
+            "pairwise_fold_size_comparisons": len(pairwise_comparisons),
             "pairwise_beats_independence": pairwise_wins,
+            "pairwise_wins_required_by_frozen_rule": pairwise_required,
+            "pairwise_measurement_supported": pairwise_wins >= pairwise_required,
+            "high_order_applicable_fold_size_comparisons": len(
+                high_order_comparisons
+            ),
             "high_order_beats_pairwise": high_order_wins,
-            "wins_required_by_frozen_rule": required,
-            "pairwise_measurement_supported": pairwise_wins >= required,
-            "high_order_candidate_supported": high_order_wins >= required,
+            "frozen_high_order_wins_required": frozen_high_order_required,
+            "high_order_decision_rule_structurally_valid": high_order_rule_valid,
+            "high_order_candidate_supported": (
+                high_order_wins >= frozen_high_order_required
+                if high_order_rule_valid
+                else None
+            ),
             "positive_method_claim": False,
         },
         "aggregate_calibration": _aggregate_calibration(folds),

@@ -229,6 +229,10 @@ class AgentRewardSelectionTests(unittest.TestCase):
         self.assertEqual(result["summary"]["group_overlap"], 0)
         self.assertFalse(result["summary"]["positive_method_claim"])
         self.assertEqual(len(result["folds"]), 2)
+        self.assertFalse(
+            result["summary"]["high_order_decision_rule_structurally_valid"]
+        )
+        self.assertIsNone(result["summary"]["high_order_candidate_supported"])
 
     def test_incomplete_matrix_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
