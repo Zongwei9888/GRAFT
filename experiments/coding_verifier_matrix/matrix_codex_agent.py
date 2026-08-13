@@ -22,6 +22,7 @@ class VerifierMatrixCodex(GraftOriginalCodex):
     MATRIX_CODEX_HOME = "/tmp/graft-matrix-codex-home"
     MATRIX_BASELINE = "/logs/agent/verifier-matrix-baseline.json"
     MATRIX_BASELINE_ARCHIVES = "/logs/agent/verifier-matrix-baselines"
+    MATRIX_CANDIDATE_ARCHIVES = "/logs/agent/verifier-matrix-candidates"
     MATRIX_REQUIREMENTS = "/logs/agent/verifier-matrix-requirements.json"
     MATRIX_CONFIG = "/logs/agent/verifier-matrix-config.json"
     MATRIX_OUTPUT = "/logs/agent/verifier-matrix.json"
@@ -140,6 +141,8 @@ class VerifierMatrixCodex(GraftOriginalCodex):
                     f"--requirements {shlex.quote(self.MATRIX_REQUIREMENTS)} "
                     f"--config {shlex.quote(self.MATRIX_CONFIG)} "
                     f"--output {shlex.quote(self.MATRIX_OUTPUT)} "
+                    "--candidate-archive-root "
+                    f"{shlex.quote(self.MATRIX_CANDIDATE_ARCHIVES)} "
                     f"--max-verifiers 8 > {shlex.quote(matrix_log)} 2>&1"
                 ),
                 env=env,

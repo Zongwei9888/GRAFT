@@ -6,18 +6,31 @@ import unittest
 from pathlib import Path
 
 from experiments.coding_verifier_matrix.verifier_matrix import (
+    OuterContainerCopyCodexRunner,
     _changed_paths,
     capture_baseline,
     materialize_config,
     select_unique_workspace,
 )
 from graft.registry import load_config
+from graft.schema import RunConfig
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_outer_container_runner_only_disables_sandbox_for_a_copy(self) -> None:
+        runner = OuterContainerCopyCodexRunner(Path("/producer"))
+        config = runner.copy_config(
+            Path("/tmp/verifier-copy"),
+            RunConfig(sandbox="read-only", network_access=True),
+        )
+        self.assertEqual(config.sandbox, "danger-full-access")
+        self.assertFalse(config.network_access)
+        with self.assertRaisesRegex(RuntimeError, "producer worktree"):
+            runner.copy_config(Path("/producer"), RunConfig())
+
     def test_workspace_resolution_requires_one_unique_repository(self) -> None:
         self.assertEqual(
             select_unique_workspace(["/testbed", "/testbed", ""]),
@@ -92,6 +105,7 @@ class CodingVerifierMatrixTests(unittest.TestCase):
 
             self.assertEqual(baseline["status"], "captured")
             self.assertTrue(Path(baseline["archive_path"]).is_file())
+            self.assertRegex(baseline["archive_sha256"], r"^[0-9a-f]{64}$")
             self.assertNotEqual(Path(baseline["archive_path"]).parent, repo)
             self.assertEqual(
                 _changed_paths(

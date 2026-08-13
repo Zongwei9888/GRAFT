@@ -68,3 +68,5 @@ feedback/promotion experiment measuring `official_post_feedback - official_pre_f
 
 - [Amendment 01](AMENDMENT-01.md) prospectively excludes runtimes whose declared hardware cannot
   be satisfied locally and records the Wav2Vec2 smoke as an infrastructure cancellation.
+- [Amendment 02](AMENDMENT-02.md) censors the first Metaflow matrix for nested seccomp failure and
+  freezes an outer-container plus per-verifier-copy replacement isolation.

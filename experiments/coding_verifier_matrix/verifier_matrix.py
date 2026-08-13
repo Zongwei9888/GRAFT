@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+from graft.codex.cli_runner import CliCodexRunner
 from graft.controller import GraftController
 from graft.evidence.baseline_archive import archive_baseline
 from graft.evidence.snapshot import hash_tree_manifest
 from graft.modeling import FeedbackGraphBuildError
 from graft.registry import default_original_config_payload, load_config
-from graft.schema import Verdict, VerifierResult, to_jsonable
+from graft.schema import RunConfig, Verdict, VerifierResult, to_jsonable
+from graft.verifiers import VerifierExecutor
 
 
 def select_unique_workspace(candidates: Sequence[str]) -> Path:
@@ -36,6 +40,38 @@ def select_unique_workspace(candidates: Sequence[str]) -> Path:
     return Path(next(iter(roots)))
 
 
+class OuterContainerCopyCodexRunner(CliCodexRunner):
+    """Run verifier tools in an expendable copy when nested seccomp is unavailable.
+
+    FeatureBench's x86 image runs under Docker Desktop emulation on this host. The
+    nested Codex Linux seccomp sandbox cannot initialize there. Harbor already
+    supplies a disposable outer container, and the matrix executor additionally
+    gives every verifier a fresh source copy. This experiment-only runner removes
+    the unsupported inner sandbox; it must never receive the producer worktree.
+    """
+
+    def __init__(self, producer_root: Path) -> None:
+        super().__init__()
+        self.producer_root = producer_root.expanduser().resolve()
+
+    def copy_config(self, repo: Path, config: RunConfig) -> RunConfig:
+        resolved = repo.expanduser().resolve()
+        if resolved == self.producer_root:
+            raise RuntimeError(
+                "Unrestricted nested execution is forbidden in the producer worktree"
+            )
+        return replace(
+            config,
+            sandbox="danger-full-access",
+            network_access=False,
+        )
+
+    def start_thread(
+        self, task: str, repo: Path, config: RunConfig = RunConfig()
+    ):
+        return super().start_thread(task, repo, self.copy_config(repo, config))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Capture a coding baseline or run a shadow verifier matrix."
@@ -57,6 +93,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--requirements", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
+    run.add_argument("--candidate-archive-root", type=Path, required=True)
     run.add_argument("--max-verifiers", type=int, default=8)
     return parser
 
@@ -75,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             requirements,
             baseline,
             config_path=args.config,
+            candidate_archive_root=args.candidate_archive_root,
             max_verifiers=args.max_verifiers,
         )
     _write_json(args.output, payload)
@@ -108,6 +146,7 @@ def capture_baseline(repo: Path, archive_root: Path) -> dict[str, Any]:
         "files": list(files),
         "file_hashes": file_hashes,
         "archive_path": str(archive),
+        "archive_sha256": _sha256_file(archive),
     }
 
 
@@ -141,6 +180,7 @@ def run_matrix(
     baseline: dict[str, Any],
     *,
     config_path: Path,
+    candidate_archive_root: Path,
     max_verifiers: int,
 ) -> dict[str, Any]:
     root = repo.expanduser().resolve()
@@ -156,6 +196,9 @@ def run_matrix(
     controller = GraftController(
         config,
         config_path=resolved_config,
+        executor=VerifierExecutor(
+            codex_runner=OuterContainerCopyCodexRunner(root),
+        ),
         report_root=None,
     )
     snapshot = controller.snapshot(
@@ -170,6 +213,15 @@ def run_matrix(
         baseline_archive_path=str(baseline["archive_path"]),
     )
     changed = _changed_paths(snapshot.file_hashes, snapshot.baseline_file_hashes)
+    candidate_archive = archive_baseline(
+        root,
+        files=snapshot.files,
+        file_hashes=snapshot.file_hashes,
+        tree_hash=snapshot.tree_hash,
+        archive_root=candidate_archive_root,
+        session_id="coding-verifier-matrix-candidate",
+        task_epoch=1,
+    )
     common = {
         "version": 1,
         "experiment": "coding-verifier-matrix",
@@ -180,10 +232,18 @@ def run_matrix(
         "candidate_tree_hash": snapshot.tree_hash,
         "checkpoint_key": snapshot.checkpoint_key,
         "changed_paths": list(changed),
+        "candidate_archive_path": str(candidate_archive),
+        "candidate_archive_sha256": _sha256_file(candidate_archive),
         "config_source": "frozen_experiment_config",
         "config_hash": snapshot.config_hash,
         "official_evaluator_visible": False,
         "feedback_sent_to_producer": False,
+        "execution_policy": {
+            "producer_workspace": "immutable",
+            "verifier_workspace": "fresh-temporary-copy",
+            "inner_sandbox": "disabled-due-to-nested-seccomp-incompatibility",
+            "outer_isolation": "disposable-harbor-container",
+        },
     }
     if not changed:
         return {**common, "status": "no_candidate_change", "verifier_count": 0}
@@ -220,8 +280,9 @@ def run_matrix(
         }
 
     def execute(spec) -> VerifierResult:
+        isolated_spec = replace(spec, isolation="temporary-copy")
         return controller.executor.run(
-            spec,
+            isolated_spec,
             snapshot,
             requirements=requirements,
             graph=graph,
@@ -285,6 +346,14 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 if __name__ == "__main__":
