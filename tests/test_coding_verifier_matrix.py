@@ -530,6 +530,16 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         )
         self.assertEqual(dataset["task_names"], ["vf2-speedup-networkx"])
 
+        v2 = json.loads(
+            path.with_name("tb3-vf2-candidate-capture-v2.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(v2["agents"][0]["env"]["CODEX_FORCE_AUTH_JSON"], "1")
+        self.assertEqual(v2["agents"][0]["model_name"], agent["model_name"])
+        self.assertEqual(v2["agents"][0]["kwargs"], agent["kwargs"])
+        self.assertEqual(v2["datasets"], config["datasets"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT

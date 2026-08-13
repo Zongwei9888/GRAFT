@@ -68,3 +68,16 @@ Secondary mechanism outcomes include selected evidence eligibility, feedback ado
 verifier/model cost, wall time, and whether an unselected verifier would have detected an official
 failure. Branch health-check rewards are ignored.
 
+## Infrastructure preflight amendment
+
+The first launch omitted the host-only `PYTHONPATH` needed for Harbor to import the custom agent and
+failed before constructing a trial agent. The second launch reached Codex, but Harbor 0.20 selected
+the exhausted `OPENAI_API_KEY` path instead of the existing ChatGPT Codex login. Codex created a
+thread and immediately returned `no credits remaining`; it produced no candidate, no token metrics,
+and no official reward. Neither launch is a Native or GRAFT outcome.
+
+Candidate config v2 changes only the Harbor authentication transport by setting
+`CODEX_FORCE_AUTH_JSON=1`, which makes Harbor upload the already logged-in local Codex `auth.json`
+to the disposable environment. The task, dataset commit, model, reasoning effort, Codex runtime,
+GRAFT commit, selection policy, and outcome definitions above remain frozen.
+
