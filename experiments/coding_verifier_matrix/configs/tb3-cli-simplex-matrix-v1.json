@@ -1,0 +1,30 @@
+{
+  "job_name": "tb3-cli-simplex-matrix-v1",
+  "jobs_dir": "experiments/coding_verifier_matrix/jobs",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "experiments.coding_verifier_matrix.matrix_codex_agent:VerifierMatrixCodex",
+      "model_name": "gpt-5.6-sol",
+      "kwargs": {
+        "version": "0.147.0",
+        "reasoning_effort": "high",
+        "graft_commit": "22d4510a426501fbf4e517c00fa24d2e98a0f9f1"
+      },
+      "env": {
+        "GRAFT_STATE_HOME": "/logs/agent/graft-state",
+        "GRAFT_CONFIG_HOME": "/logs/agent/graft-config"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "terminal-bench/terminal-bench",
+      "ref": "3.0.0",
+      "task_names": [
+        "terminal-bench/cli-2ph-simplex"
+      ]
+    }
+  ]
+}

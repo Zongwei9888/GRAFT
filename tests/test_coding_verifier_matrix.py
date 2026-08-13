@@ -231,6 +231,27 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             ],
         )
 
+    def test_tb3_causal_matrix_is_source_and_runtime_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "tb3-cli-simplex-matrix-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        dataset = config["datasets"][0]
+
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+        self.assertRegex(agent["kwargs"]["graft_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(dataset["name"], "terminal-bench/terminal-bench")
+        self.assertEqual(dataset["ref"], "3.0.0")
+        self.assertEqual(
+            dataset["task_names"], ["terminal-bench/cli-2ph-simplex"]
+        )
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
