@@ -155,6 +155,33 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             ["netflix__metaflow.b390a8d4.test_stub_generator.7bf08c98.lv1"],
         )
 
+    def test_featurebench_same_thread_continuation_is_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "featurebench-metaflow-continuation-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        kwargs = agent["kwargs"]
+
+        self.assertEqual(config["job_name"], "featurebench-metaflow-continuation-v1")
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(kwargs["version"], "0.147.0")
+        self.assertEqual(
+            kwargs["graft_commit"],
+            "2fce6cc29a0eb65ca349910614709374b790d6f4",
+        )
+        self.assertRegex(kwargs["matrix_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(kwargs["candidate_archive_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(kwargs["session_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            config["datasets"][0]["task_names"],
+            ["netflix__metaflow.b390a8d4.test_stub_generator.7bf08c98.lv1"],
+        )
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

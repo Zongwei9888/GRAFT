@@ -1,0 +1,31 @@
+{
+  "job_name": "featurebench-metaflow-continuation-v1",
+  "jobs_dir": "experiments/coding_verifier_matrix/jobs",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "experiments.coding_verifier_matrix.matrix_continuation_agent:MatrixContinuationCodex",
+      "model_name": "gpt-5.6-sol",
+      "kwargs": {
+        "version": "0.147.0",
+        "reasoning_effort": "high",
+        "graft_commit": "2fce6cc29a0eb65ca349910614709374b790d6f4",
+        "source_job_dir": "experiments/coding_verifier_matrix/jobs/featurebench-metaflow-verifier-matrix-v2",
+        "matrix_sha256": "4881015a048e4f36061f55447b1bd91e109315c5f91497f78a926ae3dee3a509",
+        "candidate_archive_sha256": "c132a465c8b5898e146bbca6979f93239ff043b386a90b4a6919064ab8b86eda",
+        "session_sha256": "4fb55edbc0f193a5395697486b8861f50e849207da6067e5dc0dc203dd7d8baa",
+        "expected_thread_id": "019ff8d2-366e-72a2-81f4-2a7c3ecb50ed"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "featurebench-lite",
+      "version": "1.0",
+      "task_names": [
+        "netflix__metaflow.b390a8d4.test_stub_generator.7bf08c98.lv1"
+      ]
+    }
+  ]
+}
