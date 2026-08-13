@@ -113,7 +113,8 @@ This is the direct protocol defect that allowed feedback. Under the amended port
 guard, replaying the exact frozen matrix now returns:
 
 ```text
-ValueError: Frozen selection contains no eligible executable feedback
+status: no_eligible_feedback
+selected_eligible_verifiers: []
 ```
 
 Thus the corrected policy would have performed No-Op and preserved the native candidate.

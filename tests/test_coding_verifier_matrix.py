@@ -15,16 +15,85 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
 )
 from experiments.coding_verifier_matrix.continuation_replay import (
     _eligible_evidence,
+    feedback_packet,
     restore_candidate,
 )
-from graft.registry import load_config
-from graft.schema import RunConfig
+from graft.registry import default_original_config_payload, load_config
+from graft.schema import (
+    Behavior,
+    FailureMode,
+    FeedbackGraph,
+    RunConfig,
+    VerifierSpec,
+    to_jsonable,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_nonportable_selected_evidence_becomes_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(default_original_config_payload()), encoding="utf-8"
+            )
+            graph = FeedbackGraph(
+                source_hash="checkpoint",
+                behaviors=(
+                    Behavior("B1", "public behavior", (), ("result",), 1, 1, 1),
+                ),
+                failure_modes=(
+                    FailureMode("F1", "B1", "behavior fails", "runtime", (), (), 1),
+                ),
+                verifiers=(
+                    VerifierSpec(
+                        verifier_id="selected",
+                        kind="codex_agent",
+                        cost=1,
+                        blocking=True,
+                        failure_modes=("F1",),
+                        estimated_detection={"F1": 0.9},
+                    ),
+                ),
+                shared_blind_spots=(),
+            )
+            report_path = root / "matrix.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "checkpoint_key": "checkpoint",
+                        "candidate_files": ["candidate.py"],
+                        "graph": to_jsonable(graph),
+                        "results": [
+                            {
+                                "verifier_id": "selected",
+                                "verdict": "fail",
+                                "blocking": True,
+                                "reproducible": True,
+                                "failure_modes": ["F1"],
+                                "evidence": [
+                                    {
+                                        "oracle_origin": "requirement_derived_runtime",
+                                        "command": ["python", "temporary_check.py"],
+                                        "failure_modes": ["F1"],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            packet = feedback_packet(report_path, config_path)
+
+            self.assertEqual(packet["status"], "no_eligible_feedback")
+            self.assertEqual(packet["selected_eligible_verifiers"], [])
+            self.assertEqual(packet["feedback"], "")
+
     def test_feedback_replay_rejects_disappearing_verifier_scripts(self) -> None:
         record = {
             "evidence": [

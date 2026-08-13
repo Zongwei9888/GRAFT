@@ -198,7 +198,16 @@ def feedback_packet(matrix_path: Path, config_path: Path) -> dict[str, Any]:
             eligible_records.append((item, evidence))
     eligible_with_evidence = tuple(eligible_records)
     if not eligible_with_evidence:
-        raise ValueError("Frozen selection contains no eligible executable feedback")
+        feedback = ""
+        return {
+            "version": 1,
+            "status": "no_eligible_feedback",
+            "checkpoint_key": str(matrix["checkpoint_key"]),
+            "selection": to_jsonable(selection),
+            "selected_eligible_verifiers": [],
+            "feedback": feedback,
+            "feedback_sha256": hashlib.sha256(feedback.encode("utf-8")).hexdigest(),
+        }
 
     behaviors = {item.behavior_id: item for item in graph.behaviors}
     failures = {item.failure_mode_id: item for item in graph.failure_modes}
@@ -287,6 +296,8 @@ def run_promotion(
         baseline_archive_path=str(baseline_archive.resolve()),
     )
     packet = feedback_packet(matrix_path, config_path)
+    if packet["status"] != "feedback_ready":
+        raise ValueError("Promotion requested without eligible executable feedback")
     selected_ids = set(packet["selected_eligible_verifiers"])
     records = {
         str(item["verifier_id"]): item

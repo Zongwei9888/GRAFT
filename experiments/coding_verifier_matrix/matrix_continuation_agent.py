@@ -123,6 +123,17 @@ class MatrixContinuationCodex(VerifierMatrixCodex):
             ),
         )
         feedback_payload = json.loads((feedback_result.stdout or "").splitlines()[-1])
+        if feedback_payload.get("status") == "no_eligible_feedback":
+            context.metadata = {
+                "source_matrix_sha256": self.matrix_sha256,
+                "feedback_checkpoint_key": self.matrix["checkpoint_key"],
+                "original_thread_id": self.expected_thread_id,
+                "promotion_status": "not_requested_no_eligible_feedback",
+                "repaired_checkpoint_key": self.matrix["checkpoint_key"],
+            }
+            return
+        if feedback_payload.get("status") != "feedback_ready":
+            raise RuntimeError("Frozen feedback packet has an unknown status")
         feedback = str(feedback_payload["feedback"])
 
         previous_workdir = environment.task_env_config.workdir

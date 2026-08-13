@@ -775,7 +775,7 @@ verifier 都用事件匹配的命令发现裸任务环境中 `import agent_code`
 - 接口要求与明示环境/评测约束冲突时 abstain，除非允许的边界或 unchanged baseline oracle 能消解；
 - promotion 继续要求 event-matched evidence、source stability 与 `fixed_and_preserved`。
 
-按新规则事后重放同一 frozen matrix 得到 `no eligible executable feedback`，即应当 No-Op；这只是安全
+按新规则事后重放同一 frozen matrix 得到 `no_eligible_feedback`，即应当 No-Op；这只是安全
 反事实审计，不能覆盖原 treatment。完整 hash、token、选择与 promotion 记录见
 `experiments/coding_verifier_matrix/PROSPECTIVE-01-RESULT.md`。在 portable evidence 与契约冲突规则完成
 回归验证前，不再扩大在线任务；之后应优先选择非饱和或 graded outcome，再进入 paired multi-task 试验。
