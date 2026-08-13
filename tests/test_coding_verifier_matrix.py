@@ -182,6 +182,31 @@ class CodingVerifierMatrixTests(unittest.TestCase):
             ["netflix__metaflow.b390a8d4.test_stub_generator.7bf08c98.lv1"],
         )
 
+    def test_featurebench_pandas_prospective_trial_is_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "featurebench-pandas-iceberg-prospective-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+
+        self.assertEqual(
+            config["job_name"], "featurebench-pandas-iceberg-prospective-v1"
+        )
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+        self.assertEqual(
+            agent["kwargs"]["graft_commit"],
+            "5d3155f4bc7122fab894294985fad2fb1e4588eb",
+        )
+        self.assertEqual(
+            config["datasets"][0]["task_names"],
+            ["pandas-dev__pandas.82fa2715.test_iceberg.85771c70.lv2"],
+        )
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

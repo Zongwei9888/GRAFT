@@ -1,0 +1,30 @@
+{
+  "job_name": "featurebench-pandas-iceberg-prospective-v1",
+  "jobs_dir": "experiments/coding_verifier_matrix/jobs",
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "agents": [
+    {
+      "name": "experiments.coding_verifier_matrix.matrix_codex_agent:VerifierMatrixCodex",
+      "model_name": "gpt-5.6-sol",
+      "kwargs": {
+        "version": "0.147.0",
+        "reasoning_effort": "high",
+        "graft_commit": "5d3155f4bc7122fab894294985fad2fb1e4588eb"
+      },
+      "env": {
+        "GRAFT_STATE_HOME": "/logs/agent/graft-state",
+        "GRAFT_CONFIG_HOME": "/logs/agent/graft-config"
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "name": "featurebench-lite",
+      "version": "1.0",
+      "task_names": [
+        "pandas-dev__pandas.82fa2715.test_iceberg.85771c70.lv2"
+      ]
+    }
+  ]
+}
