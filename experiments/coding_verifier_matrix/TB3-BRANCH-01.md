@@ -121,3 +121,32 @@ the frozen candidate, baseline, and its own configured model capabilities.
 The plan job `tb3-vf2-graft-plan-v1` pins the manifest and archive digests above. It restores that
 exact candidate in a new environment and builds the graph only; it runs no verifier and sends no
 feedback. The plan config is committed before model execution.
+
+## Graph closure and verifier-branch freeze
+
+The plan completed with exact candidate/checkpoint agreement and produced:
+
+- plan SHA-256: `5d19de7d992592e826ecc7de1c083fcc59cca44ad5083a0b4745396a89dbfc57`;
+- 10 behaviors, 13 failure modes, 7 verifier instances, and 6 shared-blind-spot scenarios;
+- five blocking execution-capable verifiers and two non-blocking semantic reviewers;
+- a requirement-derived `F11` performance-gate failure mode for geometric-mean speedup below 1000×;
+- behavior-modeling cost: 72,821 input / 47,360 cached / 3,975 output tokens, 108.62 seconds;
+- verifier-planning cost: 19,781 input / 0 cached / 4,141 output tokens, 91.71 seconds.
+
+The graph reports no official-evaluator visibility and no producer feedback. Its branch health-check
+reward is ignored. The complete verifier ID set is frozen before any verifier runs:
+
+```text
+adversarial-test-01
+agentic-evidence-01
+agentic-evidence-02
+repo-evidence-01
+repo-evidence-02
+semantic-review-01
+semantic-review-02
+```
+
+Job `tb3-vf2-verifier-branches-v1` runs all seven IDs, one at a time, in separate newly created task
+environments restored from the same candidate archive. No branch shares a mutable filesystem with
+the producer or another verifier. Results are assembled only if every ID completes on the exact
+frozen checkpoint; no result-aware pruning is permitted.

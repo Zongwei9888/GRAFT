@@ -574,6 +574,34 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         )
         self.assertEqual(plan["datasets"], config["datasets"])
 
+        branches = json.loads(
+            path.with_name("tb3-vf2-verifier-branches-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        branch_agents = branches["agents"]
+        self.assertEqual(len(branch_agents), 7)
+        self.assertEqual(
+            {item["kwargs"]["verifier_id"] for item in branch_agents},
+            {
+                "adversarial-test-01",
+                "agentic-evidence-01",
+                "agentic-evidence-02",
+                "repo-evidence-01",
+                "repo-evidence-02",
+                "semantic-review-01",
+                "semantic-review-02",
+            },
+        )
+        for branch_agent in branch_agents:
+            self.assertNotIn("CODEX_FORCE_AUTH_JSON", branch_agent["env"])
+            self.assertTrue(branch_agent["kwargs"]["use_host_auth_json"])
+            self.assertEqual(
+                branch_agent["kwargs"]["plan_sha256"],
+                "5d19de7d992592e826ecc7de1c083fcc59cca44ad5083a0b4745396a89dbfc57",
+            )
+        self.assertEqual(branches["datasets"], config["datasets"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT
