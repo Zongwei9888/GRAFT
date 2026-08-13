@@ -279,6 +279,16 @@ class VerifierExecutor:
                     )
                 except ValueError:
                     promotion_outcome = PromotionOutcome.UNRESOLVED
+                # Promotion is an evidence-bearing state transition, not a model
+                # opinion.  A reviewer may claim FIXED_AND_PRESERVED while its
+                # reported commands fail to match any observed Codex tool event.
+                # Preserve the PASS verdict for audit, but never promote that
+                # unaudited claim.
+                if (
+                    promotion_outcome == PromotionOutcome.FIXED_AND_PRESERVED
+                    and not reproduced_modes
+                ):
+                    promotion_outcome = PromotionOutcome.UNRESOLVED
 
         mutation = _producer_workspace_mutation(
             snapshot,
@@ -433,6 +443,11 @@ command. In the evidence object, copy that exact executed argv or shell payload 
 rewriting, or substituting an equivalent command. If you cannot execute and report that exact
 standalone reproduction, mark the finding non-reproducible or abstain. GRAFT intentionally rejects
 claimed commands that do not identify an observed tool event.
+Do not use a shell heredoc for executable evidence. In the disposable workspace, create any
+temporary check with the file-edit tool first, then execute that file with one standalone command
+such as `python path/to/check.py`. Report that exact standalone command. A heredoc, pipeline,
+redirection, chained shell program, or a rewritten approximation of an observed command will be
+rejected even when the check itself passed.
 A code-review suspicion, successful source-inspection command, or generated mock/stub
 counterexample is not mechanically reproducible blocking evidence. Authoritative runtime and
 unchanged baseline evidence must name the exact failure modes plus an actually executed command or

@@ -113,6 +113,28 @@ class PassingPromotionRunner:
         )
 
 
+class UnmatchedPassingPromotionRunner(PassingPromotionRunner):
+    def start_thread(self, prompt, repo, config):
+        turn = super().start_thread(prompt, repo, config)
+        return TurnResult(
+            thread_id=turn.thread_id,
+            final_response=turn.final_response,
+            events=(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "command_execution",
+                        "command": ["python", "some_other_check.py"],
+                    },
+                },
+            ),
+            usage=turn.usage,
+            return_code=turn.return_code,
+            stderr=turn.stderr,
+            duration_s=turn.duration_s,
+        )
+
+
 class CodexReviewerTests(unittest.TestCase):
     def test_verifier_prompt_requires_exact_standalone_reproduction(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -148,6 +170,8 @@ class CodexReviewerTests(unittest.TestCase):
                 environment_fingerprint="test",
             )
             self.assertIn("execute a minimal reproduction", prompt)
+            self.assertIn("Do not use a shell heredoc", prompt)
+            self.assertIn("temporary check with the file-edit tool", prompt)
             self.assertIn("copy that exact executed argv", prompt)
             self.assertIn("do not join it", prompt)
 
@@ -295,6 +319,45 @@ class CodexReviewerTests(unittest.TestCase):
             self.assertEqual(
                 result.promotion_outcome, PromotionOutcome.FIXED_AND_PRESERVED
             )
+
+    def test_unmatched_promotion_claim_is_mechanically_downgraded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.json").write_text('{"version": 2}\n', encoding="utf-8")
+            (root / "source.py").write_text("value = 1\n", encoding="utf-8")
+            source = freeze_source(root, requirements=("Keep the public behavior",))
+            failure = FailureMode("f", "b", "public behavior fails", "runtime", (), (), 1)
+            spec = VerifierSpec(
+                verifier_id="promotion-agent",
+                kind="codex_agent",
+                cost=1,
+                blocking=True,
+                failure_modes=("f",),
+                objective="revalidate the repaired behavior",
+                prompt="execute the prior reproduction",
+                isolation="temporary-copy",
+                revalidates_feedback=True,
+            )
+            graph = FeedbackGraph(
+                source.checkpoint_key,
+                (Behavior("b", "keep public behavior", (), ("result",), 1, 1, 0),),
+                (failure,),
+                (spec,),
+                (),
+            )
+            result = VerifierExecutor(
+                codex_runner=UnmatchedPassingPromotionRunner()
+            ).run(
+                spec,
+                source,
+                requirements=("Keep the public behavior",),
+                graph=graph,
+                config_path=root / "config.json",
+                environment_fingerprint="test",
+            )
+            self.assertEqual(result.verdict, Verdict.PASS)
+            self.assertFalse(result.executed_evidence)
+            self.assertEqual(result.promotion_outcome, PromotionOutcome.UNRESOLVED)
 
     def _run_evidence_case(
         self,
