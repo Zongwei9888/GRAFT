@@ -81,3 +81,14 @@ Candidate config v2 changes only the Harbor authentication transport by setting
 to the disposable environment. The task, dataset commit, model, reasoning effort, Codex runtime,
 GRAFT commit, selection policy, and outcome definitions above remain frozen.
 
+The v2 Native candidate completed normally and received official reward `0.0`, but Harbor treats
+every configured agent environment value as a secret. Because the authentication switch used the
+low-entropy value `1`, Harbor replaced every occurrence of that digit in downloaded text artifacts,
+including the candidate manifest, requirements, and configuration. The opaque candidate archive
+remained byte-valid, but the prospective replay bundle did not. The v2 score is retained as a valid
+Native observation and the row is censored before GRAFT planning; it is not repaired post hoc.
+
+Candidate config v3 moves the same authentication choice to the boolean agent parameter
+`use_host_auth_json`. The adapter still uploads the same existing Codex `auth.json`, but the switch
+is no longer included in Harbor's text-redaction values. No task, model, prompt, runtime, GRAFT
+commit, verifier budget, or outcome rule changes. Config v3 is frozen before its model execution.

@@ -540,6 +540,20 @@ class CodingVerifierMatrixTests(unittest.TestCase):
         self.assertEqual(v2["agents"][0]["kwargs"], agent["kwargs"])
         self.assertEqual(v2["datasets"], config["datasets"])
 
+        v3 = json.loads(
+            path.with_name("tb3-vf2-candidate-capture-v3.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        v3_agent = v3["agents"][0]
+        self.assertNotIn("CODEX_FORCE_AUTH_JSON", v3_agent["env"])
+        self.assertTrue(v3_agent["kwargs"]["use_host_auth_json"])
+        self.assertEqual(v3_agent["model_name"], agent["model_name"])
+        expected_kwargs = dict(agent["kwargs"])
+        expected_kwargs["use_host_auth_json"] = True
+        self.assertEqual(v3_agent["kwargs"], expected_kwargs)
+        self.assertEqual(v3["datasets"], config["datasets"])
+
     def test_featurebench_fallback_is_source_and_runtime_pinned(self) -> None:
         path = (
             PROJECT_ROOT

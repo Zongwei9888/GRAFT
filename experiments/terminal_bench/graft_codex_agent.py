@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shlex
+from pathlib import Path
 from typing import override
 
 from harbor.agents.installed.codex import Codex
@@ -28,7 +29,14 @@ class NativeCodex(Codex):
     def name() -> str:
         return "native-codex"
 
-    def __init__(self, *args, extra_env: dict[str, str] | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        *args,
+        extra_env: dict[str, str] | None = None,
+        use_host_auth_json: bool = False,
+        **kwargs,
+    ) -> None:
+        self.use_host_auth_json = bool(use_host_auth_json)
         merged_env = dict(extra_env or {})
         for key in (
             "HTTPS_PROXY",
@@ -43,6 +51,27 @@ class NativeCodex(Codex):
             if value := os.environ.get(key):
                 merged_env.setdefault(key, value)
         super().__init__(*args, extra_env=merged_env, **kwargs)
+
+    @override
+    def _resolve_auth_json_path(self) -> Path | None:
+        """Select ChatGPT authentication without adding a redaction secret.
+
+        Harbor treats every configured agent ``env`` value as sensitive and
+        replaces that value in downloaded text artifacts.  A conventional
+        ``CODEX_FORCE_AUTH_JSON=1`` therefore corrupts every digit ``1`` in
+        JSON logs.  The explicit agent option keeps authentication selection
+        out of that redaction set while retaining Harbor's normal upload path.
+        """
+
+        configured = super()._resolve_auth_json_path()
+        if configured is not None or not self.use_host_auth_json:
+            return configured
+        default = Path.home() / ".codex" / "auth.json"
+        if not default.is_file():
+            raise ValueError(
+                f"use_host_auth_json is enabled but {default} does not exist"
+            )
+        return default
 
     @override
     async def run(
