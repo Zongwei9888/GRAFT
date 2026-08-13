@@ -13,7 +13,35 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
 from graft.registry import load_config
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_featurebench_smoke_is_source_and_runtime_pinned(self) -> None:
+        path = (
+            PROJECT_ROOT
+            / "experiments"
+            / "coding_verifier_matrix"
+            / "configs"
+            / "featurebench-wav2vec2-matrix-v1.json"
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        agent = config["agents"][0]
+        dataset = config["datasets"][0]
+
+        self.assertEqual(agent["model_name"], "gpt-5.6-sol")
+        self.assertEqual(agent["kwargs"]["version"], "0.147.0")
+        self.assertRegex(agent["kwargs"]["graft_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(dataset["name"], "featurebench-lite")
+        self.assertEqual(dataset["version"], "1.0")
+        self.assertEqual(
+            dataset["task_names"],
+            [
+                "huggingface__transformers.e2e8dbed."
+                "test_processing_wav2vec2.4f660c78.lv1"
+            ],
+        )
+
     def test_baseline_capture_is_external_and_detects_changed_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
