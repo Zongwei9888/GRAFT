@@ -163,6 +163,31 @@ class AgentRewardSelectionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_matrix(path)
 
+    def test_expert_unsure_row_is_excluded_before_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "matrix.jsonl"
+            rows = [
+                {
+                    "trajectory_id": "unsure",
+                    "benchmark": "b",
+                    "task_id": "1",
+                    "label": None,
+                    "judgments": {"a": {"prediction": 1}},
+                },
+                {
+                    "trajectory_id": "binary",
+                    "benchmark": "b",
+                    "task_id": "2",
+                    "label": 0,
+                    "judgments": {"a": {"prediction": 0}},
+                },
+            ]
+            path.write_text(
+                "".join(json.dumps(item) + "\n" for item in rows), encoding="utf-8"
+            )
+            loaded = load_matrix(path)
+            self.assertEqual([item.trajectory_id for item in loaded], ["binary"])
+
 
 if __name__ == "__main__":
     unittest.main()

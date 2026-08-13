@@ -81,6 +81,8 @@ def load_matrix(path: Path) -> tuple[MatrixRow, ...]:
             continue
         try:
             raw = json.loads(line)
+            if raw.get("label") is None:
+                continue
             label = int(raw["label"])
             judgments = raw["judgments"]
             if label not in {0, 1} or not isinstance(judgments, dict):

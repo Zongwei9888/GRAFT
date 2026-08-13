@@ -1,5 +1,5 @@
 {
-  "protocol_version": 2,
+  "protocol_version": 3,
   "frozen_at": "2026-08-13",
   "dataset_revision": "b6d17e646009d6cb63d5dd7be78807b680693f61",
   "unit": "trajectory",
@@ -13,7 +13,8 @@
   "outcome": {
     "positive_event": "expert-labeled unsuccessful trajectory",
     "detected_when": "at least one selected judge predicts unsuccessful",
-    "false_reject_when": "at least one selected judge predicts unsuccessful for an expert-labeled successful trajectory"
+    "false_reject_when": "at least one selected judge predicts unsuccessful for an expert-labeled successful trajectory",
+    "expert_unsure_policy": "exclude before deterministic grouped split"
   },
   "primary_constraints": {
     "cardinality_budgets": [1, 2, 3, 4],
@@ -54,6 +55,11 @@
       "date": "2026-08-13",
       "reason": "Schema smoke found a present judge output outside its required binary schema before the complete test matrix was opened.",
       "change": "Separate missing files from verifier abstention. Missing files still fail matrix construction; abstention retains observed cost but supplies no blocking detection evidence."
+    },
+    {
+      "date": "2026-08-13",
+      "reason": "The complete pre-result audit confirmed one expert trajectory label is unsure rather than binary.",
+      "change": "Exclude nonbinary expert labels before applying the deterministic task-group split; retain the row in the immutable matrix and audit."
     }
   ]
 }
