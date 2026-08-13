@@ -28,7 +28,7 @@ from graft.schema import (
     VerifierResult,
     to_jsonable,
 )
-from graft.verifiers import VerifierExecutor
+from graft.verifiers import VerifierExecutor, portable_reproduction_argv
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -176,16 +176,28 @@ def feedback_packet(matrix_path: Path, config_path: Path) -> dict[str, Any]:
     config = load_config(config_path)
     selection = replay_selection(matrix_path, config)
     selected = set(selection.verifier_ids)
-    eligible = tuple(
-        item
-        for item in matrix.get("results", [])
-        if isinstance(item, Mapping)
-        and str(item.get("verifier_id")) in selected
-        and item.get("verdict") == Verdict.FAIL.value
-        and bool(item.get("blocking"))
-        and bool(item.get("reproducible"))
+    candidate_files = frozenset(
+        str(item) for item in matrix.get("candidate_files", [])
     )
-    if not eligible:
+    eligible_records: list[tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]] = []
+    for item in matrix.get("results", []):
+        if (
+            not isinstance(item, Mapping)
+            or str(item.get("verifier_id")) not in selected
+            or item.get("verdict") != Verdict.FAIL.value
+            or not bool(item.get("blocking"))
+            or not bool(item.get("reproducible"))
+        ):
+            continue
+        evidence = _eligible_evidence(
+            item,
+            {str(mode) for mode in item.get("failure_modes", [])},
+            candidate_files,
+        )
+        if evidence:
+            eligible_records.append((item, evidence))
+    eligible_with_evidence = tuple(eligible_records)
+    if not eligible_with_evidence:
         raise ValueError("Frozen selection contains no eligible executable feedback")
 
     behaviors = {item.behavior_id: item for item in graph.behaviors}
@@ -195,10 +207,16 @@ def feedback_packet(matrix_path: Path, config_path: Path) -> dict[str, Any]:
         f"Checkpoint: {matrix['checkpoint_key']}",
         "Reproducible blocking evidence selected by the frozen Original policy:",
     ]
-    for result in eligible:
+    for result, reproductions in eligible_with_evidence:
         verifier_id = str(result["verifier_id"])
         lines.append(f"- Verifier {verifier_id}: {result.get('summary', '')}")
-        result_modes = tuple(str(item) for item in result.get("failure_modes", []))
+        result_modes = tuple(
+            dict.fromkeys(
+                str(mode)
+                for evidence in reproductions
+                for mode in evidence.get("failure_modes", [])
+            )
+        )
         for failure_id in result_modes:
             failure = failures.get(failure_id)
             if failure is None:
@@ -207,7 +225,6 @@ def feedback_packet(matrix_path: Path, config_path: Path) -> dict[str, Any]:
             if behavior is not None:
                 lines.append(f"  Violated behavior: {behavior.description}")
             lines.append(f"  Failure mode: {failure.description}")
-        reproductions = _eligible_evidence(result, set(result_modes))
         for evidence in reproductions:
             lines.append(f"  Observation: {evidence.get('observation', '')}")
             lines.append(
@@ -225,7 +242,9 @@ def feedback_packet(matrix_path: Path, config_path: Path) -> dict[str, Any]:
         "status": "feedback_ready",
         "checkpoint_key": str(matrix["checkpoint_key"]),
         "selection": to_jsonable(selection),
-        "selected_eligible_verifiers": [str(item["verifier_id"]) for item in eligible],
+        "selected_eligible_verifiers": [
+            str(item["verifier_id"]) for item, _ in eligible_with_evidence
+        ],
         "feedback": feedback,
         "feedback_sha256": hashlib.sha256(feedback.encode("utf-8")).hexdigest(),
     }
@@ -275,11 +294,23 @@ def run_promotion(
         if isinstance(item, Mapping) and str(item.get("verifier_id")) in selected_ids
     }
     original_graph = load_report_graph(matrix_path)
+    candidate_files = frozenset(
+        str(item) for item in matrix.get("candidate_files", [])
+    )
+    evidence_by_verifier = {
+        verifier_id: _eligible_evidence(
+            record,
+            {str(mode) for mode in record.get("failure_modes", [])},
+            candidate_files,
+        )
+        for verifier_id, record in records.items()
+    }
     target_modes = tuple(
         dict.fromkeys(
             str(mode)
-            for record in records.values()
-            for mode in record.get("failure_modes", [])
+            for evidence_items in evidence_by_verifier.values()
+            for evidence in evidence_items
+            for mode in evidence.get("failure_modes", [])
         )
     )
     failures = {
@@ -288,8 +319,8 @@ def run_promotion(
     behaviors = {item.behavior_id: item for item in original_graph.behaviors}
     evidence_items = tuple(
         evidence
-        for record in records.values()
-        for evidence in _eligible_evidence(record, set(target_modes))
+        for items in evidence_by_verifier.values()
+        for evidence in items
     )
     promotion = PromotionRequirement(
         feedback_checkpoint_key=str(matrix["checkpoint_key"]),
@@ -321,7 +352,11 @@ def run_promotion(
         replace(
             by_id[verifier_id],
             failure_modes=tuple(
-                str(item) for item in records[verifier_id].get("failure_modes", [])
+                dict.fromkeys(
+                    str(mode)
+                    for evidence in evidence_by_verifier[verifier_id]
+                    for mode in evidence.get("failure_modes", [])
+                )
             ),
             isolation="temporary-copy",
             revalidates_feedback=True,
@@ -392,7 +427,9 @@ def run_promotion(
 
 
 def _eligible_evidence(
-    record: Mapping[str, Any], valid_modes: set[str]
+    record: Mapping[str, Any],
+    valid_modes: set[str],
+    candidate_files: frozenset[str] = frozenset(),
 ) -> tuple[Mapping[str, Any], ...]:
     allowed = {
         "authoritative_runtime",
@@ -406,6 +443,10 @@ def _eligible_evidence(
         and item.get("oracle_origin") in allowed
         and isinstance(item.get("command"), list)
         and bool(item.get("command"))
+        and portable_reproduction_argv(
+            tuple(str(part) for part in item.get("command", [])),
+            frozen_files=candidate_files,
+        )
         and bool(set(str(mode) for mode in item.get("failure_modes", [])) & valid_modes)
     )
 

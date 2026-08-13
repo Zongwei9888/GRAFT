@@ -753,3 +753,29 @@ GRAFT 总成本。完整 token lower bound、artifact hash、finding 强弱边�
 协议见 `experiments/coding_verifier_matrix/SMOKE-02.md`。下一步先做独立 finding adjudication 与严格标注
 为 post-hoc 的 shared-prefix repair/promotion 机制实验，再扩展多任务矩阵；不得从这个单样本声称 GRAFT
 优于 Native Codex 或高阶图有效。
+
+## 13. 2026-08-13 首个前瞻 Coding 闭环结果
+
+FeatureBench Pandas Iceberg hard/lv2 任务在看到 producer 输出前完成冻结。Native/shared-prefix Codex
+官方得分 `1.0`。GRAFT 的 7 个 shadow verifier 中有 3 个产生 blocking reproduction；预算 4 的
+Original selector 选中 2 个并回送同一 Codex thread。修复后的官方得分仍为 `1.0`，但两个 promotion
+verifier 都用事件匹配的命令发现裸任务环境中 `import agent_code` 因缺少 pandas 而失败，因此正确标记
+`regressed`，整体未 promotion。
+
+这是当前在线策略的负结果：reward 增量为零，额外 continuation 与 promotion 成本很高，而且反馈诱导了
+一个 promotion 可复现的环境回归。图本次有 0 个 blind-spot edge，未起到高阶共同失效作用。
+
+根因审计还发现，所有被选中的发现命令都依赖 verifier 临时副本中的脚本；命令事件虽然真实，脚本并未
+随反馈携带，producer 无法原样复现。公开要求又同时规定使用 pandas helper/type、并明确 pandas 在任务
+环境缺失且不得安装，verifier 不应单边强制其中一个分支。已追加与任务无关的安全 amendment：
+
+- requirement-derived evidence 只有引用冻结 candidate 文件或使用 `python -c` 等自携带单 argv 才可反馈；
+- replay 对旧报告再次检查 portability；
+- 只反馈实际被合格 evidence 覆盖的 failure mode；
+- 接口要求与明示环境/评测约束冲突时 abstain，除非允许的边界或 unchanged baseline oracle 能消解；
+- promotion 继续要求 event-matched evidence、source stability 与 `fixed_and_preserved`。
+
+按新规则事后重放同一 frozen matrix 得到 `no eligible executable feedback`，即应当 No-Op；这只是安全
+反事实审计，不能覆盖原 treatment。完整 hash、token、选择与 promotion 记录见
+`experiments/coding_verifier_matrix/PROSPECTIVE-01-RESULT.md`。在 portable evidence 与契约冲突规则完成
+回归验证前，不再扩大在线任务；之后应优先选择非饱和或 graded outcome，再进入 paired multi-task 试验。

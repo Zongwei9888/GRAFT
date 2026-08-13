@@ -14,6 +14,7 @@ from experiments.coding_verifier_matrix.verifier_matrix import (
     select_unique_workspace,
 )
 from experiments.coding_verifier_matrix.continuation_replay import (
+    _eligible_evidence,
     restore_candidate,
 )
 from graft.registry import load_config
@@ -24,6 +25,41 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodingVerifierMatrixTests(unittest.TestCase):
+    def test_feedback_replay_rejects_disappearing_verifier_scripts(self) -> None:
+        record = {
+            "evidence": [
+                {
+                    "oracle_origin": "requirement_derived_runtime",
+                    "command": ["python", "verifier_checks/check.py"],
+                    "failure_modes": ["F1"],
+                },
+                {
+                    "oracle_origin": "requirement_derived_runtime",
+                    "command": ["python", "-c", "raise AssertionError('F1')"],
+                    "failure_modes": ["F1"],
+                },
+                {
+                    "oracle_origin": "requirement_derived_runtime",
+                    "command": ["python", "candidate_check.py"],
+                    "failure_modes": ["F1"],
+                },
+            ]
+        }
+
+        eligible = _eligible_evidence(
+            record,
+            {"F1"},
+            frozenset({"candidate_check.py"}),
+        )
+
+        self.assertEqual(
+            [item["command"] for item in eligible],
+            [
+                ["python", "-c", "raise AssertionError('F1')"],
+                ["python", "candidate_check.py"],
+            ],
+        )
+
     def test_candidate_archive_restores_exact_tree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

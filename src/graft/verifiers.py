@@ -443,11 +443,13 @@ command. In the evidence object, copy that exact executed argv or shell payload 
 rewriting, or substituting an equivalent command. If you cannot execute and report that exact
 standalone reproduction, mark the finding non-reproducible or abstain. GRAFT intentionally rejects
 claimed commands that do not identify an observed tool event.
-Do not use a shell heredoc for executable evidence. In the disposable workspace, create any
-temporary check with the file-edit tool first, then execute that file with one standalone command
-such as `python path/to/check.py`. Report that exact standalone command. A heredoc, pipeline,
-redirection, chained shell program, or a rewritten approximation of an observed command will be
-rejected even when the check itself passed.
+Do not use a shell heredoc for executable evidence. You may create a temporary file with the
+file-edit tool for exploratory checks, but the final reported reproduction must be one standalone,
+portable command. Prefer an inline single-process argv such as `python -c <program>` or invoke a
+test/program that already belongs to the frozen candidate. Report that exact standalone command.
+A heredoc, pipeline, redirection, chained shell program, rewritten approximation of an observed
+command, or command that depends on a verifier-created temporary file is not eligible for feedback
+and must be reported as non-reproducible, even if it passed or failed in this copy.
 A code-review suspicion, successful source-inspection command, or generated mock/stub
 counterexample is not mechanically reproducible blocking evidence. Authoritative runtime and
 unchanged baseline evidence must name the exact failure modes plus an actually executed command or
@@ -461,6 +463,12 @@ enforcing the stricter interpretation. When competing standard semantics remain 
 case that distinguishes them and report which branch the candidate implements; do not call that
 branch wrong without contract authority. Return only the schema-conforming verdict object. If the
 required capability or oracle is unavailable, abstain instead of guessing.
+Treat explicit environment and evaluation constraints in the raw requirements as authoritative too.
+Do not label a failure caused solely by a dependency that the task says is absent, forbidden to
+install, or supplied only by the evaluation boundary as a product regression. If an interface
+instruction appears to require that unavailable dependency at runtime, record the contract conflict
+and abstain unless an allowed task-provided boundary or unchanged baseline oracle resolves it. Never
+install or inspect a dependency that the task forbids in order to manufacture that resolution.
 """
 
 
@@ -556,6 +564,10 @@ def _blocking_reproduced_modes(
         observed_artifact = _observed_artifact(item, run_root)
         if not observed_command and not observed_artifact:
             continue
+        if observed_command and not _portable_reproduction_command(
+            item.command, run_root, snapshot
+        ):
+            continue
         if (
             item.oracle_origin == "baseline_repository"
             and not _is_baseline_evidence(item, run_root, snapshot)
@@ -623,6 +635,108 @@ def _candidate_changed_files(snapshot: SourceSnapshot) -> tuple[str, ...] | None
         if path not in snapshot.file_hashes
     )
     return tuple(sorted(changed))
+
+
+def _portable_reproduction_command(
+    command: tuple[str, ...], run_root: Path, snapshot: SourceSnapshot
+) -> bool:
+    """Reject verifier-only files that disappear before feedback continuation.
+
+    A command is portable when every file it references belongs to the frozen
+    candidate snapshot. Inline programs (for example ``python -c``) contain their
+    own reproduction and therefore do not depend on a temporary verifier artifact.
+    This is deliberately checked while the isolated verifier workspace still
+    exists; a generated script can otherwise look reproducible in the report but
+    be absent when the producer thread receives that report.
+    """
+
+    return portable_reproduction_argv(
+        command,
+        frozen_files=frozenset(snapshot.file_hashes),
+        run_root=run_root,
+    )
+
+
+def portable_reproduction_argv(
+    command: tuple[str, ...],
+    *,
+    frozen_files: frozenset[str],
+    run_root: Path | None = None,
+) -> bool:
+    """Check whether a reported command survives beyond a verifier copy."""
+
+    if not command:
+        return False
+    root = run_root.resolve() if run_root is not None else None
+    executable = Path(command[0]).name
+    if executable in {"bash", "sh", "zsh"} and any(
+        flag in command for flag in ("-c", "-lc")
+    ):
+        return False
+    inline_payload_indexes: set[int] = set()
+    inline_flags = {
+        "python": {"-c"},
+        "python3": {"-c"},
+        "pypy": {"-c"},
+        "pypy3": {"-c"},
+        "node": {"-e", "--eval", "-p", "--print"},
+        "ruby": {"-e"},
+        "perl": {"-e", "-E"},
+    }.get(executable, set())
+    for index, part in enumerate(command[:-1]):
+        if part in inline_flags:
+            inline_payload_indexes.add(index + 1)
+    for index, raw in enumerate(command[1:], start=1):
+        if index in inline_payload_indexes:
+            continue
+        token = str(raw).strip()
+        if not token or token.startswith("-") or "\n" in token:
+            continue
+        # Test runners commonly append a node selector to a real path.
+        path_text = token.split("::", 1)[0]
+        raw_path = Path(path_text)
+        was_absolute = raw_path.is_absolute()
+        candidate = raw_path if was_absolute or root is None else root / raw_path
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        looks_like_file = (
+            (root is not None and resolved.is_file())
+            or was_absolute
+            or "/" in path_text
+            or "\\" in path_text
+            or Path(path_text).suffix
+            in {
+                ".py",
+                ".js",
+                ".mjs",
+                ".cjs",
+                ".rb",
+                ".sh",
+                ".zsh",
+                ".bash",
+                ".pl",
+                ".php",
+                ".lua",
+                ".r",
+                ".R",
+            }
+        )
+        if not looks_like_file:
+            continue
+        if root is None:
+            if was_absolute:
+                return False
+            relative = raw_path.as_posix()
+        else:
+            try:
+                relative = resolved.relative_to(root).as_posix()
+            except ValueError:
+                return False
+        if relative not in frozen_files:
+            return False
+    return True
 
 
 def _observed_commands(events: tuple[Mapping[str, Any], ...]) -> frozenset[str]:

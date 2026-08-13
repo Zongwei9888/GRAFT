@@ -19,7 +19,11 @@ from graft.schema import (
     VerifierSpec,
     Verdict,
 )
-from graft.verifiers import VerifierExecutor, _command_fingerprints
+from graft.verifiers import (
+    VerifierExecutor,
+    _command_fingerprints,
+    _portable_reproduction_command,
+)
 from graft.verifiers import _verifier_prompt
 
 
@@ -38,7 +42,11 @@ class EvidenceRunner:
         self.requirement_refs = requirement_refs
 
     def start_thread(self, prompt, repo, config):
-        command = ["python", "baseline_test.py"]
+        command = (
+            ["python", "-c", "raise AssertionError('observed mismatch')"]
+            if self.origin == "requirement_derived_runtime"
+            else ["python", "baseline_test.py"]
+        )
         response = {
             "verdict": "fail",
             "failure_modes": ["f"],
@@ -76,7 +84,7 @@ class EvidenceRunner:
 
 class PassingPromotionRunner:
     def start_thread(self, prompt, repo, config):
-        command = ["python", "promotion_check.py"]
+        command = ["python", "-c", "print('promotion passed')"]
         response = {
             "verdict": "pass",
             "failure_modes": [],
@@ -171,7 +179,9 @@ class CodexReviewerTests(unittest.TestCase):
             )
             self.assertIn("execute a minimal reproduction", prompt)
             self.assertIn("Do not use a shell heredoc", prompt)
-            self.assertIn("temporary check with the file-edit tool", prompt)
+            self.assertIn("temporary file with the", prompt)
+            self.assertIn("one standalone,\nportable command", prompt)
+            self.assertIn("explicit environment and evaluation constraints", prompt)
             self.assertIn("copy that exact executed argv", prompt)
             self.assertIn("do not join it", prompt)
 
@@ -358,6 +368,33 @@ class CodexReviewerTests(unittest.TestCase):
             self.assertEqual(result.verdict, Verdict.PASS)
             self.assertFalse(result.executed_evidence)
             self.assertEqual(result.promotion_outcome, PromotionOutcome.UNRESOLVED)
+
+    def test_generated_reproduction_script_is_not_portable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "candidate.py").write_text("value = 1\n", encoding="utf-8")
+            snapshot = freeze_source(root, requirements=("Keep value correct",))
+            (root / "verifier_check.py").write_text(
+                "assert False\n", encoding="utf-8"
+            )
+
+            self.assertFalse(
+                _portable_reproduction_command(
+                    ("python", "verifier_check.py"), root, snapshot
+                )
+            )
+            self.assertTrue(
+                _portable_reproduction_command(
+                    ("python", "candidate.py"), root, snapshot
+                )
+            )
+            self.assertTrue(
+                _portable_reproduction_command(
+                    ("python", "-c", "import candidate; assert candidate.value == 1"),
+                    root,
+                    snapshot,
+                )
+            )
 
     def _run_evidence_case(
         self,

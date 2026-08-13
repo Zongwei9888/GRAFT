@@ -230,6 +230,7 @@ def run_matrix(
         "requirements_hash": snapshot.requirement_hash,
         "baseline_tree_hash": snapshot.baseline_tree_hash,
         "candidate_tree_hash": snapshot.tree_hash,
+        "candidate_files": list(snapshot.files),
         "checkpoint_key": snapshot.checkpoint_key,
         "changed_paths": list(changed),
         "candidate_archive_path": str(candidate_archive),
