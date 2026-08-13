@@ -150,3 +150,9 @@ Job `tb3-vf2-verifier-branches-v1` runs all seven IDs, one at a time, in separat
 environments restored from the same candidate archive. No branch shares a mutable filesystem with
 the producer or another verifier. Results are assembled only if every ID completes on the exact
 frozen checkpoint; no result-aware pruning is permitted.
+
+The first branch batch is closed under [Amendment 05](AMENDMENT-05.md). It is a censored mechanism
+observation, not an official GRAFT effectiveness result: two LLM verifiers found substantive
+candidate risks, but their commands depended on disposable `/tmp/nx342` state and therefore failed
+the portability gate; four other branches had timeout or Harbor/Docker infrastructure failures.
+No continuation feedback was sent.
